@@ -78,3 +78,9 @@ coverage/
 # ── Misc ─────────────────────────────────────────────────────────────────────
 *.pem
 .cache/
+.next-dev
+.env
+.env.local
+dist
+out
+.next
