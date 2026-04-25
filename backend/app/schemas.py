@@ -1,0 +1,148 @@
+from typing import List, Literal, Optional
+from pydantic import BaseModel, EmailStr, field_validator
+
+
+# ── Auth Schemas ──────────────────────────────────────────────────────────────
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    username: str
+    password: str
+
+    @field_validator("username")
+    @classmethod
+    def username_alphanumeric(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 3 or len(v) > 32:
+            raise ValueError("Username must be 3–32 characters")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def password_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+# ── User Preference Schemas ───────────────────────────────────────────────────
+
+class UserPreferencesUpdate(BaseModel):
+    location: Optional[str] = "Global"
+    categories: Optional[List[str]] = []
+    email_alerts: Optional[bool] = None
+    push_alerts: Optional[bool] = None
+    digest_hour: Optional[str] = None
+    legal_accepted: Optional[bool] = None
+
+
+class UserPreferencesResponse(BaseModel):
+    location: str
+    categories: List[str]
+    email_alerts: bool = False
+    push_alerts: bool = False
+    digest_hour: str = "08:00"
+    legal_accepted: bool = False
+
+
+class BookmarkUpsert(BaseModel):
+    article_id: str
+    title: str
+    article_url: str
+    source: str
+    image_url: Optional[str] = None
+    category: Optional[str] = None
+    region: Optional[str] = None
+    published_at: Optional[str] = None
+
+
+class BookmarkResponse(BookmarkUpsert):
+    id: str
+    user_id: str
+
+
+class InteractionCreate(BaseModel):
+    article_id: str
+    action: Literal["read", "share", "bookmark"]
+    category: Optional[str] = None
+    source: Optional[str] = None
+
+
+class NotificationTestRequest(BaseModel):
+    channel: Literal["email", "push"]
+    message: str = "Test notification from Newsly"
+
+
+class PublisherControlUpdate(BaseModel):
+    source: str
+    is_blocked: bool = False
+    max_per_feed: int = 0
+    policy_status: str = "active"
+
+
+class PublisherControlResponse(BaseModel):
+    source: str
+    is_blocked: bool
+    max_per_feed: int
+    policy_status: str
+
+
+class TakedownCreate(BaseModel):
+    source: str
+    article_url: str
+    reason: str
+    requester_email: EmailStr
+
+
+class TakedownResolve(BaseModel):
+    status: Literal["resolved"]
+
+
+class TakedownResponse(BaseModel):
+    id: str
+    source: str
+    article_url: str
+    reason: str
+    requester_email: str
+    status: str
+
+
+# ── News Schemas ──────────────────────────────────────────────────────────────
+
+class ArticleResponse(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    source: str
+    published_at: Optional[str] = None
+    article_url: str
+    category: str
+    region: str = "Global"
+    # AI-enriched fields
+    summary: Optional[str] = None
+    tone: Optional[str] = None       # Positive | Neutral | Negative
+    bias: Optional[str] = None       # Left | Center-Left | Center | Center-Right | Right
+    emotional_words: Optional[List[str]] = []
+    highlight_title: Optional[str] = None
+    highlight_description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class NewsResponse(BaseModel):
+    total: int
+    page: int
+    limit: int
+    articles: List[ArticleResponse]

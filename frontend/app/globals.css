@@ -1,0 +1,92 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply scroll-smooth;
+    /* NO scrollbar-gutter: stable — breaks mobile full-width layouts */
+  }
+
+  body {
+    @apply bg-background text-ink font-sans antialiased;
+    /* Kill tap highlight flash on iOS/Android */
+    -webkit-tap-highlight-color: transparent;
+    /* Prevent font size inflation on iOS landscape */
+    -webkit-text-size-adjust: 100%;
+    /* Prevent horizontal overflow on mobile */
+    overflow-x: hidden;
+  }
+
+  /* Dark mode body background */
+  html.dark body {
+    background-color: #0C0C0D;
+    color: #F3F4F6;
+  }
+
+  /* Hide scrollbars on category tabs etc. without affecting layout */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Momentum scrolling on iOS */
+  .scroll-touch {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Text selection color */
+  ::selection {
+    background-color: #EFF6FF;
+    color: #2563EB;
+  }
+}
+
+@layer components {
+  /* ── Skeleton shimmer ────────────────────────────────────────────────── */
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+
+  .skeleton {
+    @apply rounded-lg bg-gray-200 dark:bg-gray-800;
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255,255,255,0.6) 50%,
+      transparent 100%
+    );
+    background-size: 400px 100%;
+    background-repeat: no-repeat;
+    animation: shimmer 1.4s ease-in-out infinite;
+  }
+
+  html.dark .skeleton {
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255,255,255,0.07) 50%,
+      transparent 100%
+    );
+  }
+
+  /* ── Tap / press feedback ────────────────────────────────────────────── */
+  .press-effect {
+    -webkit-tap-highlight-color: transparent;
+    @apply transition-transform duration-100 active:scale-95;
+  }
+
+  /* ── Safe area bottom padding (notch phones) ─────────────────────────── */
+  .pb-safe {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0.75rem));
+  }
+
+  /* ── Full-bleed mobile container ─────────────────────────────────────── */
+  .mobile-container {
+    @apply w-full max-w-lg mx-auto;
+  }
+}

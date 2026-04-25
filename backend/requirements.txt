@@ -1,0 +1,30 @@
+# Web framework
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# Database (async SQLite, Supabase-ready via SQLAlchemy)
+sqlalchemy==2.0.30
+aiosqlite==0.20.0
+
+# Pydantic v2 + settings + email validation
+pydantic[email]==2.7.1
+pydantic-settings==2.2.1
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-multipart==0.0.9
+
+# Async HTTP + RSS parsing
+aiohttp==3.9.5
+feedparser==6.0.11
+
+# Sentiment analysis (lightweight, no model download)
+vaderSentiment==3.3.2
+
+# HTTP client for Ollama
+httpx==0.27.0
+
+# Environment config
+python-dotenv==1.0.1
