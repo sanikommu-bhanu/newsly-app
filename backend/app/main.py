@@ -63,7 +63,7 @@ cors_origins = [
     "http://localhost:8000",  # Local backend access
 ]
 # For Render/production, add your frontend domain:
-# cors_origins.extend(["https://newsly.vercel.app", "https://yourdomain.com"])
+cors_origins.extend(["https://newsly-seven-jet.vercel.app/"])
 
 app.add_middleware(
     CORSMiddleware,
