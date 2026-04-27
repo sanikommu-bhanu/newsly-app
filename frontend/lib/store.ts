@@ -2,7 +2,7 @@
 
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
-import type { Article, User } from '@/types'
+import type { Article, LanguageCode, User } from '@/types'
 
 type UsageAnalytics = {
   sessions: number
@@ -25,6 +25,7 @@ interface NewslyState {
 
   // ── UI ────────────────────────────────────────────────────────────────────
   darkMode: boolean
+  language: LanguageCode
   aiEnabled: boolean
   emailAlerts: boolean
   pushAlerts: boolean
@@ -38,6 +39,7 @@ interface NewslyState {
   setPreferences: (location: string, categories: string[]) => void
   completeOnboarding: () => void
   toggleDarkMode: () => void
+  setLanguage: (language: LanguageCode) => void
   toggleAI: () => void
   setAlerts: (next: { emailAlerts?: boolean; pushAlerts?: boolean }) => void
   setLegalAccepted: (accepted: boolean) => void
@@ -58,6 +60,7 @@ export const useStore = create<NewslyState>()(
       location: 'Global',
       categories: [],
       darkMode: false,
+      language: 'en',
       aiEnabled: true,
       emailAlerts: false,
       pushAlerts: false,
@@ -84,6 +87,7 @@ export const useStore = create<NewslyState>()(
           categories: [],
           location: 'Global',
           darkMode: false,
+          language: 'en',
           emailAlerts: false,
           pushAlerts: false,
           legalAccepted: false,
@@ -109,6 +113,7 @@ export const useStore = create<NewslyState>()(
           }
           return { darkMode: next }
         }),
+      setLanguage: (language) => set({ language }),
 
       toggleAI: () => set((s) => ({ aiEnabled: !s.aiEnabled })),
       setAlerts: (next) =>

@@ -1,8 +1,10 @@
 from typing import List, Literal, Optional
+
 from pydantic import BaseModel, EmailStr, field_validator
 
 
 # ── Auth Schemas ──────────────────────────────────────────────────────────────
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -12,10 +14,10 @@ class UserCreate(BaseModel):
     @field_validator("username")
     @classmethod
     def username_alphanumeric(cls, v: str) -> str:
-        v = v.strip()
-        if len(v) < 3 or len(v) > 32:
+        value = v.strip()
+        if len(value) < 3 or len(value) > 32:
             raise ValueError("Username must be 3–32 characters")
-        return v
+        return value
 
     @field_validator("password")
     @classmethod
@@ -30,12 +32,17 @@ class UserLogin(BaseModel):
     password: str
 
 
+class SocialGoogleLogin(BaseModel):
+    id_token: str
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
 
-# ── User Preference Schemas ───────────────────────────────────────────────────
+# ── User / Profile Schemas ────────────────────────────────────────────────────
+
 
 class UserPreferencesUpdate(BaseModel):
     location: Optional[str] = "Global"
@@ -53,6 +60,82 @@ class UserPreferencesResponse(BaseModel):
     push_alerts: bool = False
     digest_hour: str = "08:00"
     legal_accepted: bool = False
+
+
+class UserProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    bio: Optional[str] = None
+    preferred_language: Optional[Literal["en", "hi"]] = None
+    avatar_url: Optional[str] = None
+
+
+class UserStatsResponse(BaseModel):
+    articles_read: int
+    shares: int
+    bookmarks: int
+    comments: int
+
+
+class UserProfileResponse(BaseModel):
+    user_id: str
+    email: str
+    username: str
+    full_name: Optional[str] = None
+    bio: Optional[str] = None
+    preferred_language: Literal["en", "hi"] = "en"
+    avatar_url: Optional[str] = None
+    stats: UserStatsResponse
+    follows: List[str] = []
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def new_password_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
+
+
+class DeleteAccountRequest(BaseModel):
+    confirm_text: str
+
+
+class FollowCreate(BaseModel):
+    follow_type: Literal["topic", "user"]
+    target: str
+
+    @field_validator("target")
+    @classmethod
+    def target_present(cls, v: str) -> str:
+        value = v.strip()
+        if not value:
+            raise ValueError("Target cannot be empty")
+        return value
+
+
+class FollowResponse(BaseModel):
+    id: str
+    follow_type: Literal["topic", "user"]
+    target: str
+    created_at: str
+
+
+class NotificationLogResponse(BaseModel):
+    id: str
+    channel: str
+    kind: str
+    message: str
+    status: str
+    created_at: str
+
+
+class NotificationTestRequest(BaseModel):
+    channel: Literal["email", "push"]
+    message: str = "Test notification from Newsly"
 
 
 class BookmarkUpsert(BaseModel):
@@ -73,14 +156,34 @@ class BookmarkResponse(BookmarkUpsert):
 
 class InteractionCreate(BaseModel):
     article_id: str
-    action: Literal["read", "share", "bookmark"]
+    action: Literal["read", "share", "bookmark", "comment"]
     category: Optional[str] = None
     source: Optional[str] = None
 
 
-class NotificationTestRequest(BaseModel):
-    channel: Literal["email", "push"]
-    message: str = "Test notification from Newsly"
+class CustomFeedCreate(BaseModel):
+    url: str
+    source_name: str
+    region_hint: Optional[str] = "Global"
+
+
+class CustomFeedResponse(BaseModel):
+    id: str
+    url: str
+    source_name: str
+    region_hint: str
+    is_active: bool
+    created_at: str
+
+
+class DigestPreviewResponse(BaseModel):
+    headline: str
+    summary: str
+    article_count: int
+    articles: List[dict]
+
+
+# ── Admin Schemas ──────────────────────────────────────────────────────────────
 
 
 class PublisherControlUpdate(BaseModel):
@@ -117,7 +220,48 @@ class TakedownResponse(BaseModel):
     status: str
 
 
-# ── News Schemas ──────────────────────────────────────────────────────────────
+class EditorPickUpdate(BaseModel):
+    article_id: str
+    title: str
+    source: str
+    note: Optional[str] = None
+    rank: int = 0
+
+
+class EditorPickResponse(BaseModel):
+    id: str
+    article_id: str
+    title: str
+    source: str
+    note: Optional[str] = None
+    rank: int
+
+
+# ── News / Article Schemas ─────────────────────────────────────────────────────
+
+
+class ArticleCommentCreate(BaseModel):
+    body: str
+
+    @field_validator("body")
+    @classmethod
+    def body_required(cls, v: str) -> str:
+        value = v.strip()
+        if len(value) < 2:
+            raise ValueError("Comment is too short")
+        if len(value) > 1000:
+            raise ValueError("Comment is too long")
+        return value
+
+
+class ArticleCommentResponse(BaseModel):
+    id: str
+    article_id: str
+    user_id: str
+    username: str
+    body: str
+    created_at: str
+
 
 class ArticleResponse(BaseModel):
     id: str
@@ -129,13 +273,13 @@ class ArticleResponse(BaseModel):
     article_url: str
     category: str
     region: str = "Global"
-    # AI-enriched fields
     summary: Optional[str] = None
-    tone: Optional[str] = None       # Positive | Neutral | Negative
-    bias: Optional[str] = None       # Left | Center-Left | Center | Center-Right | Right
+    tone: Optional[str] = None
+    bias: Optional[str] = None
     emotional_words: Optional[List[str]] = []
     highlight_title: Optional[str] = None
     highlight_description: Optional[str] = None
+    read_time_minutes: Optional[int] = 1
 
     class Config:
         from_attributes = True
@@ -146,3 +290,4 @@ class NewsResponse(BaseModel):
     page: int
     limit: int
     articles: List[ArticleResponse]
+

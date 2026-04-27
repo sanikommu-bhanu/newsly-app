@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas import (
+    EditorPickResponse,
+    EditorPickUpdate,
     PublisherControlResponse,
     PublisherControlUpdate,
     TakedownCreate,
@@ -15,7 +17,10 @@ from app.user.service import (
     create_takedown,
     list_publisher_controls,
     list_takedowns,
+    list_editor_picks,
+    remove_editor_pick,
     resolve_takedown,
+    upsert_editor_pick,
     set_publisher_control,
 )
 
@@ -51,6 +56,50 @@ async def upsert_publisher(body: PublisherControlUpdate, db: AsyncSession = Depe
         max_per_feed=int(row.max_per_feed or "0"),
         policy_status=row.policy_status,
     )
+
+
+@router.get("/editor-picks", response_model=list[EditorPickResponse])
+async def get_editor_picks(db: AsyncSession = Depends(get_db)):
+    rows = await list_editor_picks(db)
+    return [
+        EditorPickResponse(
+            id=row.id,
+            article_id=row.article_id,
+            title=row.title,
+            source=row.source,
+            note=row.note,
+            rank=row.rank,
+        )
+        for row in rows
+    ]
+
+
+@router.post("/editor-picks", response_model=EditorPickResponse)
+async def upsert_editor_pick_entry(body: EditorPickUpdate, db: AsyncSession = Depends(get_db)):
+    row = await upsert_editor_pick(
+        db,
+        article_id=body.article_id,
+        title=body.title,
+        source=body.source,
+        note=body.note,
+        rank=body.rank,
+    )
+    return EditorPickResponse(
+        id=row.id,
+        article_id=row.article_id,
+        title=row.title,
+        source=row.source,
+        note=row.note,
+        rank=row.rank,
+    )
+
+
+@router.delete("/editor-picks/{pick_id}")
+async def delete_editor_pick(pick_id: str, db: AsyncSession = Depends(get_db)):
+    ok = await remove_editor_pick(db, pick_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Editor pick not found.")
+    return {"message": "Editor pick deleted."}
 
 
 @router.post("/takedowns", response_model=TakedownResponse)

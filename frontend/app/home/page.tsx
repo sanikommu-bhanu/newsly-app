@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { RefreshCw, MapPin } from 'lucide-react'
 import { useStore } from '@/lib/store'
-import { fetchNews } from '@/lib/api'
+import { fetchEditorPicks, fetchNews, fetchRecommendations, fetchTrending } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { Article } from '@/types'
 
@@ -32,6 +32,9 @@ export default function HomePage() {
   const [errorType, setErrorType] = useState<'error' | null>(null)
   const [retrying, setRetrying] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [trending, setTrending] = useState<Article[]>([])
+  const [editorPicks, setEditorPicks] = useState<Article[]>([])
+  const [recommended, setRecommended] = useState<Article[]>([])
   const loaderRef = useRef<HTMLDivElement>(null)
 
   // Auth guard — small delay to let Zustand hydrate from localStorage
@@ -83,6 +86,16 @@ export default function HomePage() {
     setPage(1)
     load(activeCategory, 1, true)
   }, [activeCategory, load])
+
+  useEffect(() => {
+    fetchTrending(4).then(setTrending).catch(() => setTrending([]))
+    fetchEditorPicks().then((rows) => setEditorPicks(rows.slice(0, 4))).catch(() => setEditorPicks([]))
+    if (token) {
+      fetchRecommendations(token, 4).then(setRecommended).catch(() => setRecommended([]))
+    } else {
+      setRecommended([])
+    }
+  }, [token])
 
   // Infinite scroll
   useEffect(() => {
@@ -162,7 +175,7 @@ export default function HomePage() {
       </header>
 
       {/* ── Personalisation banner ──────────────────────────────────────── */}
-      {categories.length > 0 && activeCategory === 'All' && (
+        {categories.length > 0 && activeCategory === 'All' && (
         <motion.div
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
@@ -176,9 +189,50 @@ export default function HomePage() {
             {categories.length > 3 && ` +${categories.length - 3} more`}
           </p>
         </motion.div>
-      )}
+        )}
 
-      {/* ── Main content ────────────────────────────────────────────────── */}
+        {activeCategory === 'All' && (
+          <section className="mb-3">
+            {trending.length > 0 && (
+              <>
+                <p className="mb-2 mt-2 px-1 text-[11px] font-sans font-semibold uppercase tracking-widest text-muted dark:text-gray-500">
+                  Trending now
+                </p>
+                <div className="space-y-3">
+                  {trending.slice(0, 2).map((article, i) => (
+                    <ArticleCard key={`trend-${article.id}`} article={article} index={i} />
+                  ))}
+                </div>
+              </>
+            )}
+            {editorPicks.length > 0 && (
+              <>
+                <p className="mb-2 mt-4 px-1 text-[11px] font-sans font-semibold uppercase tracking-widest text-muted dark:text-gray-500">
+                  Editor&apos;s picks
+                </p>
+                <div className="space-y-3">
+                  {editorPicks.slice(0, 2).map((article, i) => (
+                    <ArticleCard key={`pick-${article.id}`} article={article} index={i} />
+                  ))}
+                </div>
+              </>
+            )}
+            {recommended.length > 0 && (
+              <>
+                <p className="mb-2 mt-4 px-1 text-[11px] font-sans font-semibold uppercase tracking-widest text-muted dark:text-gray-500">
+                  Recommended for you
+                </p>
+                <div className="space-y-3">
+                  {recommended.slice(0, 2).map((article, i) => (
+                    <ArticleCard key={`rec-${article.id}`} article={article} index={i} />
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
+        {/* ── Main content ────────────────────────────────────────────────── */}
       <main className="px-4 pt-3">
         {loading ? (
           // Always show skeletons — never a blank screen

@@ -34,6 +34,10 @@ export default function ExplorePage() {
   const [selectedCat, setSelectedCat] = useState<string | null>(null)
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  const [source, setSource] = useState('')
+  const [tone, setTone] = useState<string | null>(null)
+  const [bias, setBias] = useState<string | null>(null)
+  const [hours, setHours] = useState<number | null>(null)
   const [articles, setArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(false)
   const [searched, setSearched] = useState(false)
@@ -50,6 +54,10 @@ export default function ExplorePage() {
         category: cat || undefined,
         location: region || undefined,
         q: search || undefined,
+        source: source || undefined,
+        tone: tone || undefined,
+        bias: bias || undefined,
+        hours: hours ?? undefined,
         page: 1,
         limit: 15,
         token,
@@ -60,7 +68,7 @@ export default function ExplorePage() {
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [token, source, tone, bias, hours])
 
   const handleCatSelect = (cat: string) => {
     const next = selectedCat === cat ? null : cat
@@ -78,6 +86,10 @@ export default function ExplorePage() {
     setSelectedCat(null)
     setSelectedRegion(null)
     setQuery('')
+    setSource('')
+    setTone(null)
+    setBias(null)
+    setHours(null)
     setArticles([])
     setSearched(false)
   }
@@ -88,7 +100,7 @@ export default function ExplorePage() {
       load(selectedCat || undefined, selectedRegion || undefined, query.trim() || undefined)
     }, 240)
     return () => clearTimeout(t)
-  }, [query, selectedCat, selectedRegion, load])
+  }, [query, selectedCat, selectedRegion, source, tone, bias, hours, load])
 
   const hasFilters = selectedCat || selectedRegion
 
@@ -124,6 +136,56 @@ export default function ExplorePage() {
               <X size={14} />
             </button>
           )}
+        </div>
+
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <input
+            type="text"
+            placeholder="Source (BBC, Reuters...)"
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="rounded-xl border border-border bg-white px-3 py-2 text-xs dark:border-dark-border dark:bg-dark-surface"
+          />
+          <select
+            value={hours ?? ''}
+            onChange={(e) => setHours(e.target.value ? Number(e.target.value) : null)}
+            className="rounded-xl border border-border bg-white px-3 py-2 text-xs dark:border-dark-border dark:bg-dark-surface"
+          >
+            <option value="">Any time</option>
+            <option value="6">Last 6h</option>
+            <option value="24">Last 24h</option>
+            <option value="72">Last 3 days</option>
+          </select>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+          {['Positive', 'Neutral', 'Negative'].map((value) => (
+            <button
+              key={value}
+              onClick={() => setTone((prev) => (prev === value ? null : value))}
+              className={cn(
+                'rounded-full border px-2 py-1',
+                tone === value
+                  ? 'border-ink bg-ink text-white dark:border-white dark:bg-white dark:text-ink'
+                  : 'border-border dark:border-dark-border'
+              )}
+            >
+              Tone: {value}
+            </button>
+          ))}
+          {['Center', 'Center-Left', 'Center-Right', 'Left', 'Right'].map((value) => (
+            <button
+              key={value}
+              onClick={() => setBias((prev) => (prev === value ? null : value))}
+              className={cn(
+                'rounded-full border px-2 py-1',
+                bias === value
+                  ? 'border-ink bg-ink text-white dark:border-white dark:bg-white dark:text-ink'
+                  : 'border-border dark:border-dark-border'
+              )}
+            >
+              Bias: {value}
+            </button>
+          ))}
         </div>
       </header>
 

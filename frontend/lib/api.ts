@@ -1,9 +1,16 @@
 import type {
   Article,
+  ArticleComment,
   AuthResponse,
+  CustomFeed,
+  DigestPreview,
+  EditorPick,
+  FollowItem,
   NewsResponse,
+  NotificationItem,
   PublisherControl,
   TakedownRequest,
+  UserProfile,
   UserPreferences,
 } from '@/types'
 
@@ -54,12 +61,23 @@ export async function login(
   })
 }
 
+export async function socialGoogleLogin(idToken: string): Promise<AuthResponse> {
+  return apiFetch('/auth/social/google', {
+    method: 'POST',
+    body: JSON.stringify({ id_token: idToken }),
+  })
+}
+
 // ── News ──────────────────────────────────────────────────────────────────────
 
 export async function fetchNews(params: {
   category?: string
   location?: string
   q?: string
+  source?: string
+  tone?: string
+  bias?: string
+  hours?: number
   page?: number
   limit?: number
   token?: string | null
@@ -71,6 +89,10 @@ export async function fetchNews(params: {
     if (params.category && params.category !== 'All') q.set('category', params.category)
     if (params.location && params.location !== 'Global') q.set('location', params.location)
     if (params.q && params.q.trim()) q.set('q', params.q.trim())
+    if (params.source && params.source.trim()) q.set('source', params.source.trim())
+    if (params.tone && params.tone.trim()) q.set('tone', params.tone.trim())
+    if (params.bias && params.bias.trim()) q.set('bias', params.bias.trim())
+    if (params.hours && params.hours > 0) q.set('hours', String(params.hours))
     q.set('page', String(params.page ?? 1))
     q.set('limit', String(params.limit ?? 20))
 
@@ -109,6 +131,46 @@ export async function fetchArticle(id: string): Promise<Article> {
   }
 }
 
+export async function fetchTrending(limit = 8): Promise<Article[]> {
+  try {
+    return await apiFetch<Article[]>(`/news/trending?limit=${limit}`)
+  } catch {
+    return MOCK_ARTICLES.slice(0, limit)
+  }
+}
+
+export async function fetchEditorPicks(): Promise<Article[]> {
+  try {
+    return await apiFetch<Article[]>('/news/editor-picks')
+  } catch {
+    return []
+  }
+}
+
+export async function fetchRecommendations(token: string, limit = 10): Promise<Article[]> {
+  return apiFetch<Article[]>(`/news/recommendations?limit=${limit}`, {}, token)
+}
+
+export async function fetchRelated(articleId: string, limit = 3): Promise<Article[]> {
+  return apiFetch<Article[]>(`/news/${articleId}/related?limit=${limit}`)
+}
+
+export async function fetchComments(articleId: string): Promise<ArticleComment[]> {
+  return apiFetch<ArticleComment[]>(`/article/${articleId}/comments`)
+}
+
+export async function postComment(
+  articleId: string,
+  body: string,
+  token: string
+): Promise<ArticleComment> {
+  return apiFetch<ArticleComment>(
+    `/article/${articleId}/comments`,
+    { method: 'POST', body: JSON.stringify({ body }) },
+    token
+  )
+}
+
 export async function savePreferences(
   prefs: UserPreferences,
   token: string
@@ -117,6 +179,49 @@ export async function savePreferences(
     method: 'POST',
     body: JSON.stringify(prefs),
   }, token)
+}
+
+export async function fetchProfile(token: string): Promise<UserProfile> {
+  return apiFetch<UserProfile>('/user/profile', {}, token)
+}
+
+export async function updateProfile(
+  token: string,
+  payload: Partial<{
+    full_name: string
+    bio: string
+    preferred_language: 'en' | 'hi'
+    avatar_url: string
+  }>
+): Promise<UserProfile> {
+  return apiFetch<UserProfile>(
+    '/user/profile',
+    { method: 'PATCH', body: JSON.stringify(payload) },
+    token
+  )
+}
+
+export async function changePassword(
+  token: string,
+  payload: { current_password: string; new_password: string }
+): Promise<void> {
+  await apiFetch('/user/change-password', { method: 'POST', body: JSON.stringify(payload) }, token)
+}
+
+export async function deleteAccount(token: string): Promise<void> {
+  await apiFetch('/user/account', { method: 'DELETE', body: JSON.stringify({ confirm_text: 'DELETE' }) }, token)
+}
+
+export async function fetchFollows(token: string): Promise<FollowItem[]> {
+  return apiFetch<FollowItem[]>('/user/follows', {}, token)
+}
+
+export async function followTopic(token: string, target: string): Promise<void> {
+  await apiFetch('/user/follows', { method: 'POST', body: JSON.stringify({ follow_type: 'topic', target }) }, token)
+}
+
+export async function unfollowTopic(token: string, target: string): Promise<void> {
+  await apiFetch(`/user/follows?follow_type=topic&target=${encodeURIComponent(target)}`, { method: 'DELETE' }, token)
 }
 
 export async function fetchBookmarks(token: string): Promise<Article[]> {
@@ -175,7 +280,7 @@ export async function removeBookmark(articleId: string, token: string): Promise<
 
 export async function trackInteraction(
   token: string,
-  payload: { article_id: string; action: 'read' | 'share' | 'bookmark'; category?: string; source?: string }
+  payload: { article_id: string; action: 'read' | 'share' | 'bookmark' | 'comment'; category?: string; source?: string }
 ): Promise<void> {
   await apiFetch(
     '/user/interactions',
@@ -191,6 +296,33 @@ export async function sendTestNotification(
   await apiFetch('/user/notifications/test', { method: 'POST', body: JSON.stringify(payload) }, token)
 }
 
+export async function fetchNotifications(token: string): Promise<NotificationItem[]> {
+  return apiFetch<NotificationItem[]>('/user/notifications?limit=30', {}, token)
+}
+
+export async function fetchDigestPreview(token: string): Promise<DigestPreview> {
+  return apiFetch<DigestPreview>('/user/newsletter/digest', {}, token)
+}
+
+export async function fetchCustomFeeds(token: string): Promise<CustomFeed[]> {
+  return apiFetch<CustomFeed[]>('/user/custom-feeds', {}, token)
+}
+
+export async function addCustomFeed(
+  token: string,
+  payload: { url: string; source_name: string; region_hint?: string }
+): Promise<void> {
+  await apiFetch('/user/custom-feeds', { method: 'POST', body: JSON.stringify(payload) }, token)
+}
+
+export async function removeCustomFeed(token: string, id: string): Promise<void> {
+  await apiFetch(`/user/custom-feeds/${id}`, { method: 'DELETE' }, token)
+}
+
+export function getBookmarkExportUrl(): string {
+  return `${API}/user/bookmarks/export`
+}
+
 export async function fetchPublisherControls(token: string): Promise<PublisherControl[]> {
   return apiFetch('/admin/publishers', {}, token)
 }
@@ -204,6 +336,21 @@ export async function upsertPublisherControl(
 
 export async function fetchTakedowns(token: string): Promise<TakedownRequest[]> {
   return apiFetch('/admin/takedowns', {}, token)
+}
+
+export async function fetchAdminEditorPicks(token: string): Promise<EditorPick[]> {
+  return apiFetch<EditorPick[]>('/admin/editor-picks', {}, token)
+}
+
+export async function upsertAdminEditorPick(
+  token: string,
+  payload: { article_id: string; title: string; source: string; note?: string; rank?: number }
+): Promise<void> {
+  await apiFetch('/admin/editor-picks', { method: 'POST', body: JSON.stringify(payload) }, token)
+}
+
+export async function deleteAdminEditorPick(token: string, id: string): Promise<void> {
+  await apiFetch(`/admin/editor-picks/${id}`, { method: 'DELETE' }, token)
 }
 
 export async function createTakedown(

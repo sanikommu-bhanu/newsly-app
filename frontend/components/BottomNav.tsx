@@ -2,15 +2,18 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Compass, Settings, Bookmark } from 'lucide-react'
+import { Home, Compass, Settings, Bookmark, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
+import { useStore } from '@/lib/store'
+import { t } from '@/lib/i18n'
 
 const NAV_ITEMS = [
-  { href: '/home',     label: 'Home',     Icon: Home     },
-  { href: '/explore',  label: 'Explore',  Icon: Compass  },
-  { href: '/bookmarks', label: 'Saved', Icon: Bookmark },
-  { href: '/settings', label: 'Settings', Icon: Settings },
+  { href: '/home', key: 'home', Icon: Home },
+  { href: '/explore', key: 'explore', Icon: Compass },
+  { href: '/bookmarks', key: 'saved', Icon: Bookmark },
+  { href: '/profile', key: 'profile', Icon: User },
+  { href: '/settings', key: 'settings', Icon: Settings },
 ]
 
 function isNavActive(pathname: string, href: string): boolean {
@@ -24,6 +27,7 @@ function isNavActive(pathname: string, href: string): boolean {
 
 export default function BottomNav() {
   const pathname = usePathname()
+  const { language } = useStore()
 
   return (
     <nav
@@ -31,8 +35,9 @@ export default function BottomNav() {
       aria-label="Main navigation"
     >
       <div className="flex items-stretch justify-around max-w-lg mx-auto h-[56px]">
-        {NAV_ITEMS.map(({ href, label, Icon }) => {
+        {NAV_ITEMS.map(({ href, key, Icon }) => {
           const active = isNavActive(pathname, href)
+          const label = t(language, key)
           return (
             <Link
               key={href}

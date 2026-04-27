@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import select
@@ -75,3 +76,21 @@ async def authenticate_user(
     if not verify_password(password, user.hashed_password):
         return None
     return user
+
+
+async def verify_google_id_token(id_token: str) -> dict:
+    async with httpx.AsyncClient(timeout=8.0) as client:
+        response = await client.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": id_token},
+        )
+    if response.status_code != 200:
+        raise ValueError("Invalid Google token.")
+    payload = response.json()
+    if not payload.get("sub") or not payload.get("email"):
+        raise ValueError("Google token missing required claims.")
+    if payload.get("email_verified") not in ("true", True):
+        raise ValueError("Google account email is not verified.")
+    if settings.GOOGLE_OAUTH_CLIENT_ID and payload.get("aud") != settings.GOOGLE_OAUTH_CLIENT_ID:
+        raise ValueError("Google token audience mismatch.")
+    return payload

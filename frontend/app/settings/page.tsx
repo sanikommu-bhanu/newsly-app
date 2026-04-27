@@ -1,85 +1,25 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { Bell, Globe, LogOut, Mail, Moon, Plus, Sun, Trash2, Zap } from 'lucide-react'
 import {
-  Moon,
-  Sun,
-  Bell,
-  Mail,
-  MapPin,
-  Tag,
-  Zap,
-  ShieldCheck,
-  LogOut,
-  ChevronRight,
-  Check,
-} from 'lucide-react'
+  addCustomFeed,
+  fetchCustomFeeds,
+  fetchDigestPreview,
+  fetchNotifications,
+  removeCustomFeed,
+  savePreferences,
+  sendTestNotification,
+  updateProfile,
+} from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { useStore } from '@/lib/store'
-import { savePreferences, sendTestNotification } from '@/lib/api'
-import { cn } from '@/lib/utils'
-import { CATEGORIES, LOCATIONS } from '@/types'
-
+import { type CustomFeed, type DigestPreview, type NotificationItem } from '@/types'
 import ThemeSync from '@/components/ThemeSync'
 import BottomNav from '@/components/BottomNav'
 import Footer from '@/components/Footer'
-
-function ToggleRow({
-  icon: Icon,
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  icon: React.ElementType
-  label: string
-  description?: string
-  checked: boolean
-  onChange: () => void
-}) {
-  return (
-    <button
-      onClick={onChange}
-      className="w-full flex items-center justify-between py-4 px-5 bg-white dark:bg-dark-surface press-effect"
-    >
-      <div className="flex items-center gap-3.5">
-        <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-dark-bg flex items-center justify-center">
-          <Icon size={15} strokeWidth={1.8} className="text-muted dark:text-gray-400" />
-        </div>
-        <div className="text-left">
-          <p className="text-[15px] font-sans font-medium text-ink dark:text-gray-100">{label}</p>
-          {description && (
-            <p className="text-xs font-sans text-muted dark:text-gray-500 mt-0.5">{description}</p>
-          )}
-        </div>
-      </div>
-      {/* Toggle pill */}
-      <div
-        className={cn(
-          'relative w-11 h-6 rounded-full transition-colors duration-200',
-          checked ? 'bg-accent' : 'bg-gray-200 dark:bg-dark-border'
-        )}
-      >
-        <div
-          className={cn(
-            'absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-transform duration-200',
-            checked ? 'translate-x-5' : 'translate-x-0.5'
-          )}
-        />
-      </div>
-    </button>
-  )
-}
-
-function SectionLabel({ label }: { label: string }) {
-  return (
-    <p className="text-[11px] font-sans font-semibold text-muted dark:text-gray-500 uppercase tracking-widest px-5 pt-6 pb-2">
-      {label}
-    </p>
-  )
-}
 
 export default function SettingsPage() {
   const router = useRouter()
@@ -90,357 +30,293 @@ export default function SettingsPage() {
     aiEnabled,
     emailAlerts,
     pushAlerts,
-    legalAccepted,
     location,
     categories,
-    analytics,
+    language,
     toggleDarkMode,
     toggleAI,
     setAlerts,
-    setPreferences,
+    setLanguage,
     logout,
   } = useStore()
 
-  const [editingLocation, setEditingLocation] = useState(false)
-  const [editingInterests, setEditingInterests] = useState(false)
-  const [tempLocation, setTempLocation] = useState(location)
-  const [tempCategories, setTempCategories] = useState<string[]>(categories)
+  const [digest, setDigest] = useState<DigestPreview | null>(null)
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
+  const [customFeeds, setCustomFeeds] = useState<CustomFeed[]>([])
+  const [feedUrl, setFeedUrl] = useState('')
+  const [feedName, setFeedName] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (!user) router.replace('/')
   }, [user, router])
 
-  const handleSavePrefs = async () => {
-    setSaving(true)
-    setPreferences(tempLocation, tempCategories)
-    if (token) {
-      savePreferences({ location: tempLocation, categories: tempCategories }, token).catch(() => {})
-    }
-    setSaving(false)
-    setEditingLocation(false)
-    setEditingInterests(false)
-  }
-
-  const toggleTempCat = (cat: string) =>
-    setTempCategories((prev) =>
-      prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
-    )
+  useEffect(() => {
+    if (!token) return
+    fetchDigestPreview(token).then(setDigest).catch(() => setDigest(null))
+    fetchNotifications(token).then(setNotifications).catch(() => setNotifications([]))
+    fetchCustomFeeds(token).then(setCustomFeeds).catch(() => setCustomFeeds([]))
+  }, [token])
 
   const handleLogout = () => {
     logout()
     router.replace('/')
   }
 
+  const handlePushToggle = async () => {
+    const next = !pushAlerts
+    if (next && 'Notification' in window) {
+      const permission = await Notification.requestPermission()
+      if (permission !== 'granted') return
+      new Notification('Newsly push alerts enabled')
+    }
+    setAlerts({ pushAlerts: next })
+    if (token) {
+      await savePreferences(
+        { location, categories, push_alerts: next, email_alerts: emailAlerts },
+        token
+      )
+      if (next) {
+        await sendTestNotification(token, {
+          channel: 'push',
+          message: 'Push alerts enabled for Newsly.',
+        })
+      }
+    }
+  }
+
+  const handleEmailToggle = async () => {
+    const next = !emailAlerts
+    setAlerts({ emailAlerts: next })
+    if (token) {
+      await savePreferences(
+        { location, categories, email_alerts: next, push_alerts: pushAlerts },
+        token
+      )
+      if (next) {
+        await sendTestNotification(token, {
+          channel: 'email',
+          message: 'Email digest enabled for Newsly.',
+        })
+      }
+    }
+  }
+
+  const onLanguageChange = async (next: 'en' | 'hi') => {
+    setLanguage(next)
+    if (token) {
+      await updateProfile(token, { preferred_language: next })
+    }
+  }
+
+  const onAddCustomFeed = async () => {
+    if (!token || !feedUrl.trim() || !feedName.trim()) return
+    setSaving(true)
+    try {
+      await addCustomFeed(token, {
+        url: feedUrl.trim(),
+        source_name: feedName.trim(),
+        region_hint: location,
+      })
+      const refreshed = await fetchCustomFeeds(token)
+      setCustomFeeds(refreshed)
+      setFeedUrl('')
+      setFeedName('')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const onRemoveCustomFeed = async (id: string) => {
+    if (!token) return
+    await removeCustomFeed(token, id)
+    setCustomFeeds((prev) => prev.filter((f) => f.id !== id))
+  }
+
+  if (!user) return null
+
   return (
     <div className="min-h-screen bg-[#FAFAFA] dark:bg-dark-bg pb-28">
       <ThemeSync />
-
-      {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="px-5 pt-12 pb-6">
         <h1 className="font-display text-2xl font-semibold text-ink dark:text-white">
-          Settings
+          {t(language, 'settings')}
         </h1>
       </header>
 
-      {/* ── Profile card ─────────────────────────────────────────────── */}
-      {user && (
-        <div className="mx-4 mb-4 bg-white dark:bg-dark-surface rounded-2xl px-5 py-4 shadow-card flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-accent-light dark:bg-blue-950 flex items-center justify-center">
-            <span className="font-display text-lg font-semibold text-accent">
-              {(user.username || user.email)[0].toUpperCase()}
+      <main className="space-y-4 px-4">
+        <section className="rounded-2xl border border-border bg-white p-4 dark:border-dark-border dark:bg-dark-surface">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-500">
+            Account
+          </p>
+          <Link href="/profile" className="text-sm font-semibold text-accent">
+            Open profile
+          </Link>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-white p-4 dark:border-dark-border dark:bg-dark-surface">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-500">
+            Appearance & AI
+          </p>
+          <div className="space-y-2 text-sm">
+            <button
+              onClick={toggleDarkMode}
+              className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-dark-border"
+            >
+              <span className="inline-flex items-center gap-2">
+                {darkMode ? <Moon size={14} /> : <Sun size={14} />} Dark mode
+              </span>
+              <span>{darkMode ? 'On' : 'Off'}</span>
+            </button>
+            <button
+              onClick={toggleAI}
+              className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-dark-border"
+            >
+              <span className="inline-flex items-center gap-2">
+                <Zap size={14} /> AI insights
+              </span>
+              <span>{aiEnabled ? 'On' : 'Off'}</span>
+            </button>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-white p-4 dark:border-dark-border dark:bg-dark-surface">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-500">
+            Notifications
+          </p>
+          <div className="space-y-2 text-sm">
+            <button
+              onClick={handlePushToggle}
+              className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-dark-border"
+            >
+              <span className="inline-flex items-center gap-2">
+                <Bell size={14} /> Push alerts
+              </span>
+              <span>{pushAlerts ? 'On' : 'Off'}</span>
+            </button>
+            <button
+              onClick={handleEmailToggle}
+              className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2 dark:border-dark-border"
+            >
+              <span className="inline-flex items-center gap-2">
+                <Mail size={14} /> Email digest
+              </span>
+              <span>{emailAlerts ? 'On' : 'Off'}</span>
+            </button>
+          </div>
+          {notifications.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {notifications.slice(0, 5).map((n) => (
+                <div
+                  key={n.id}
+                  className="rounded-lg border border-border px-3 py-2 text-xs dark:border-dark-border"
+                >
+                  <p className="font-semibold">{n.kind}</p>
+                  <p className="text-muted dark:text-gray-400">{n.message}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-border bg-white p-4 dark:border-dark-border dark:bg-dark-surface">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-500">
+            {t(language, 'newsletter')}
+          </p>
+          {digest ? (
+            <div className="rounded-lg border border-border px-3 py-2 text-sm dark:border-dark-border">
+              <p className="font-semibold">{digest.headline}</p>
+              <p className="mt-1 text-muted dark:text-gray-400">{digest.summary}</p>
+              <p className="mt-1 text-xs">{digest.article_count} stories</p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted dark:text-gray-400">Digest preview unavailable.</p>
+          )}
+        </section>
+
+        <section className="rounded-2xl border border-border bg-white p-4 dark:border-dark-border dark:bg-dark-surface">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-500">
+            {t(language, 'customRss')}
+          </p>
+          <div className="mb-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+            <input
+              value={feedName}
+              onChange={(e) => setFeedName(e.target.value)}
+              placeholder="Source name"
+              className="rounded-lg border border-border px-3 py-2 text-sm dark:border-dark-border dark:bg-dark-bg"
+            />
+            <input
+              value={feedUrl}
+              onChange={(e) => setFeedUrl(e.target.value)}
+              placeholder="https://example.com/feed.xml"
+              className="rounded-lg border border-border px-3 py-2 text-sm dark:border-dark-border dark:bg-dark-bg"
+            />
+          </div>
+          <button
+            onClick={onAddCustomFeed}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs font-semibold dark:border-dark-border"
+          >
+            <Plus size={12} /> Add feed
+          </button>
+          <div className="mt-3 space-y-2">
+            {customFeeds.map((feed) => (
+              <div
+                key={feed.id}
+                className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm dark:border-dark-border"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{feed.source_name}</p>
+                  <p className="truncate text-xs text-muted dark:text-gray-400">{feed.url}</p>
+                </div>
+                <button
+                  onClick={() => onRemoveCustomFeed(feed.id)}
+                  className="rounded-full p-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-border bg-white p-4 dark:border-dark-border dark:bg-dark-surface">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-500">
+            <span className="inline-flex items-center gap-2">
+              <Globe size={12} /> {t(language, 'language')}
             </span>
+          </p>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onLanguageChange('en')}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                language === 'en'
+                  ? 'border-ink bg-ink text-white dark:border-white dark:bg-white dark:text-ink'
+                  : 'border-border dark:border-dark-border'
+              }`}
+            >
+              English
+            </button>
+            <button
+              onClick={() => onLanguageChange('hi')}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                language === 'hi'
+                  ? 'border-ink bg-ink text-white dark:border-white dark:bg-white dark:text-ink'
+                  : 'border-border dark:border-dark-border'
+              }`}
+            >
+              हिन्दी
+            </button>
           </div>
-          <div>
-            <p className="font-sans font-semibold text-[15px] text-ink dark:text-gray-100">
-              {user.username}
-            </p>
-            <p className="text-xs font-sans text-muted dark:text-gray-500 mt-0.5">
-              {user.email}
-            </p>
-          </div>
-        </div>
-      )}
+        </section>
 
-      {/* ── Appearance ───────────────────────────────────────────────── */}
-      <SectionLabel label="Appearance" />
-      <div className="mx-4 bg-white dark:bg-dark-surface rounded-2xl overflow-hidden shadow-card divide-y divide-border dark:divide-dark-border">
-        <ToggleRow
-          icon={darkMode ? Moon : Sun}
-          label="Dark Mode"
-          description="Easy on the eyes at night"
-          checked={darkMode}
-          onChange={toggleDarkMode}
-        />
-      </div>
-
-      {/* ── AI Features ──────────────────────────────────────────────── */}
-      <SectionLabel label="AI Features" />
-      <div className="mx-4 bg-white dark:bg-dark-surface rounded-2xl overflow-hidden shadow-card">
-        <ToggleRow
-          icon={Zap}
-          label="AI Summaries & Insights"
-          description="Tone, bias, emotional analysis"
-          checked={aiEnabled}
-          onChange={toggleAI}
-        />
-      </div>
-
-      <SectionLabel label="Alerts" />
-      <div className="mx-4 bg-white dark:bg-dark-surface rounded-2xl overflow-hidden shadow-card divide-y divide-border dark:divide-dark-border">
-        <ToggleRow
-          icon={Bell}
-          label="Push Alerts"
-          description="Get instant breaking-news notifications"
-          checked={pushAlerts}
-          onChange={() => {
-            const next = !pushAlerts
-            setAlerts({ pushAlerts: next })
-            if (token) {
-              void savePreferences(
-                { location, categories, push_alerts: next, email_alerts: emailAlerts },
-                token
-              ).catch(() => {})
-              if (next) {
-                void sendTestNotification(token, {
-                  channel: 'push',
-                  message: 'Push alerts enabled for Newsly.',
-                }).catch(() => {})
-              }
-            }
-          }}
-        />
-        <ToggleRow
-          icon={Mail}
-          label="Email Digest"
-          description="Receive a daily summary in your inbox"
-          checked={emailAlerts}
-          onChange={() => {
-            const next = !emailAlerts
-            setAlerts({ emailAlerts: next })
-            if (token) {
-              void savePreferences(
-                { location, categories, email_alerts: next, push_alerts: pushAlerts },
-                token
-              ).catch(() => {})
-              if (next) {
-                void sendTestNotification(token, {
-                  channel: 'email',
-                  message: 'Email digest enabled for Newsly.',
-                }).catch(() => {})
-              }
-            }
-          }}
-        />
-      </div>
-
-      {/* ── Personalisation ──────────────────────────────────────────── */}
-      <SectionLabel label="Personalisation" />
-      <div className="mx-4 bg-white dark:bg-dark-surface rounded-2xl overflow-hidden shadow-card divide-y divide-border dark:divide-dark-border">
-
-        {/* Location row */}
-        <div>
-          <button
-            onClick={() => { setEditingLocation((v) => !v); setTempLocation(location) }}
-            className="w-full flex items-center justify-between py-4 px-5 press-effect"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-dark-bg flex items-center justify-center">
-                <MapPin size={15} strokeWidth={1.8} className="text-muted dark:text-gray-400" />
-              </div>
-              <div className="text-left">
-                <p className="text-[15px] font-sans font-medium text-ink dark:text-gray-100">Location</p>
-                <p className="text-xs font-sans text-muted dark:text-gray-500 mt-0.5">{location}</p>
-              </div>
-            </div>
-            <ChevronRight
-              size={16}
-              strokeWidth={2}
-              className={cn(
-                'text-muted transition-transform duration-200',
-                editingLocation && 'rotate-90'
-              )}
-            />
-          </button>
-          <AnimatePresence>
-            {editingLocation && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                className="overflow-hidden"
-              >
-                <div className="px-5 pb-4 space-y-2">
-                  {LOCATIONS.map(({ id, label, emoji }) => (
-                    <button
-                      key={id}
-                      onClick={() => setTempLocation(id)}
-                      className={cn(
-                        'w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all',
-                        tempLocation === id
-                          ? 'bg-ink dark:bg-white border-ink dark:border-white'
-                          : 'bg-gray-50 dark:bg-dark-bg border-border dark:border-dark-border'
-                      )}
-                    >
-                      <span className={cn('text-sm font-sans font-medium flex items-center gap-2', tempLocation === id ? 'text-white dark:text-ink' : 'text-ink dark:text-gray-200')}>
-                        <span>{emoji}</span> {label}
-                      </span>
-                      {tempLocation === id && <Check size={14} className="text-white dark:text-ink" />}
-                    </button>
-                  ))}
-                  <button
-                    onClick={handleSavePrefs}
-                    disabled={saving}
-                    className="w-full mt-1 py-2.5 bg-accent text-white text-sm font-sans font-semibold rounded-xl disabled:opacity-60"
-                  >
-                    {saving ? 'Saving…' : 'Save'}
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        {/* Interests row */}
-        <div>
-          <button
-            onClick={() => { setEditingInterests((v) => !v); setTempCategories(categories) }}
-            className="w-full flex items-center justify-between py-4 px-5 press-effect"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-dark-bg flex items-center justify-center">
-                <Tag size={15} strokeWidth={1.8} className="text-muted dark:text-gray-400" />
-              </div>
-              <div className="text-left">
-                <p className="text-[15px] font-sans font-medium text-ink dark:text-gray-100">Interests</p>
-                <p className="text-xs font-sans text-muted dark:text-gray-500 mt-0.5">
-                  {categories.length === 0
-                    ? 'All topics'
-                    : categories.slice(0, 3).join(', ') +
-                      (categories.length > 3 ? ` +${categories.length - 3}` : '')}
-                </p>
-              </div>
-            </div>
-            <ChevronRight
-              size={16}
-              strokeWidth={2}
-              className={cn(
-                'text-muted transition-transform duration-200',
-                editingInterests && 'rotate-90'
-              )}
-            />
-          </button>
-          <AnimatePresence>
-            {editingInterests && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                className="overflow-hidden"
-              >
-                <div className="px-5 pb-4">
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    {CATEGORIES.map((cat) => {
-                      const isSelected = tempCategories.includes(cat)
-                      return (
-                        <button
-                          key={cat}
-                          onClick={() => toggleTempCat(cat)}
-                          className={cn(
-                            'py-2.5 rounded-xl border text-sm font-sans font-medium transition-all press-effect',
-                            isSelected
-                              ? 'bg-ink dark:bg-white text-white dark:text-ink border-ink dark:border-white'
-                              : 'bg-gray-50 dark:bg-dark-bg text-ink dark:text-gray-300 border-border dark:border-dark-border'
-                          )}
-                        >
-                          {cat}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <button
-                    onClick={handleSavePrefs}
-                    disabled={saving}
-                    className="w-full py-2.5 bg-accent text-white text-sm font-sans font-semibold rounded-xl disabled:opacity-60"
-                  >
-                    {saving ? 'Saving…' : 'Save Interests'}
-                  </button>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      <SectionLabel label="Insights" />
-      <div className="mx-4 rounded-2xl border border-border bg-white px-5 py-4 shadow-card dark:border-dark-border dark:bg-dark-surface">
-        <div className="grid grid-cols-2 gap-3 text-center">
-          <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-dark-bg">
-            <p className="font-display text-lg text-ink dark:text-white">{analytics.articlesRead}</p>
-            <p className="text-[11px] font-sans text-muted dark:text-gray-500">Articles read</p>
-          </div>
-          <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-dark-bg">
-            <p className="font-display text-lg text-ink dark:text-white">{analytics.bookmarksAdded}</p>
-            <p className="text-[11px] font-sans text-muted dark:text-gray-500">Bookmarks added</p>
-          </div>
-          <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-dark-bg">
-            <p className="font-display text-lg text-ink dark:text-white">{analytics.shares}</p>
-            <p className="text-[11px] font-sans text-muted dark:text-gray-500">Shares</p>
-          </div>
-          <div className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-dark-bg">
-            <p className="font-display text-lg text-ink dark:text-white">{analytics.sessions}</p>
-            <p className="text-[11px] font-sans text-muted dark:text-gray-500">Sessions</p>
-          </div>
-        </div>
-      </div>
-
-      <SectionLabel label="Legal" />
-      <div className="mx-4 bg-white dark:bg-dark-surface rounded-2xl overflow-hidden shadow-card">
-        <Link href="/legal" className="w-full flex items-center justify-between py-4 px-5 press-effect">
-          <div className="flex items-center gap-3.5">
-            <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-dark-bg flex items-center justify-center">
-              <ShieldCheck size={15} strokeWidth={1.8} className="text-muted dark:text-gray-400" />
-            </div>
-            <div className="text-left">
-              <p className="text-[15px] font-sans font-medium text-ink dark:text-gray-100">Legal & Policy</p>
-              <p className="text-xs font-sans text-muted dark:text-gray-500 mt-0.5">
-                {legalAccepted ? 'Accepted' : 'Review required'}
-              </p>
-            </div>
-          </div>
-          <ChevronRight size={16} strokeWidth={2} className="text-muted" />
-        </Link>
-        <Link
-          href="/admin/legal"
-          className="w-full flex items-center justify-between border-t border-border py-4 px-5 press-effect dark:border-dark-border"
-        >
-          <div className="text-left">
-            <p className="text-[15px] font-sans font-medium text-ink dark:text-gray-100">
-              Publisher & Takedown Admin
-            </p>
-            <p className="text-xs font-sans text-muted dark:text-gray-500 mt-0.5">
-              Source blocklist, limits, legal requests
-            </p>
-          </div>
-          <ChevronRight size={16} strokeWidth={2} className="text-muted" />
-        </Link>
-      </div>
-
-      {/* ── Account ──────────────────────────────────────────────────── */}
-      <SectionLabel label="Account" />
-      <div className="mx-4 bg-white dark:bg-dark-surface rounded-2xl overflow-hidden shadow-card">
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3.5 px-5 py-4 press-effect"
+          className="inline-flex items-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-sm font-semibold text-white"
         >
-          <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-950/50 flex items-center justify-center">
-            <LogOut size={15} strokeWidth={1.8} className="text-rose-500" />
-          </div>
-          <span className="text-[15px] font-sans font-medium text-rose-500">Sign Out</span>
+          <LogOut size={14} /> Sign out
         </button>
-      </div>
+      </main>
 
       <Footer className="mx-4 mt-8 border-0" />
       <BottomNav />
