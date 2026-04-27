@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: newsly-api
+    env: python
+    plan: free
+    pythonVersion: 3.11.9
+    
+    # Build and startup
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    
+    # Auto-generated environment variables (required)
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql+asyncpg://...  # Replace with your PostgreSQL connection string from Render
+        scope: shared
+      - key: SECRET_KEY
+        generateValue: true  # Auto-generate a secure random value
+        scope: shared
+      - key: ALGORITHM
+        value: HS256
+        scope: shared
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 60
+        scope: shared
+      - key: OLLAMA_ENABLED
+        value: 'false'  # Disable Ollama on production (not available on Render)
+        scope: shared
+      - key: NEWS_CACHE_TTL
+        value: '900'
+        scope: shared

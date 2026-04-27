@@ -9,7 +9,7 @@ import asyncio
 import hashlib
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -230,7 +230,7 @@ def parse_date(entry: feedparser.FeedParserDict) -> str:
                 return datetime(*value[:6]).isoformat()
             except Exception:
                 pass
-    return datetime.utcnow().isoformat()
+    return datetime.now(timezone.utc).isoformat()
 
 
 # ── Per-feed fetch ────────────────────────────────────────────────────────────
@@ -336,7 +336,7 @@ async def fetch_newsapi_articles(session: aiohttp.ClientSession) -> List[Dict]:
                     "description": description or None,
                     "image_url": normalize_image_url(item.get("urlToImage")),
                     "source": source_name,
-                    "published_at": item.get("publishedAt") or datetime.utcnow().isoformat(),
+                    "published_at": item.get("publishedAt") or datetime.now(timezone.utc).isoformat(),
                     "article_url": link,
                     "region_hint": "Global",
                     "_raw_text": f"{title}. {description}"[:MAX_RAW_TEXT_LEN],

@@ -1,8 +1,13 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+    )
+    
     # ── Auth ──────────────────────────────────────────────────────────────────
     SECRET_KEY: str = "newsly-dev-secret-key-change-in-production"
     ALGORITHM: str = "HS256"
@@ -19,10 +24,6 @@ class Settings(BaseSettings):
     NEWS_API_KEY: Optional[str] = None
     # ── News Cache ────────────────────────────────────────────────────────────
     NEWS_CACHE_TTL: int = 900  # seconds (15 minutes)
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 settings = Settings()

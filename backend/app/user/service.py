@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -125,7 +125,9 @@ async def delete_bookmark(db: AsyncSession, user_id: str, article_id: str) -> bo
     bookmark = result.scalar_one_or_none()
     if not bookmark:
         return False
-    await db.delete(bookmark)
+    await db.execute(delete(UserBookmark).where(
+        UserBookmark.user_id == user_id, UserBookmark.article_id == article_id
+    ))
     await db.commit()
     return True
 

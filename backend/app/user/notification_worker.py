@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 async def run_digest_worker() -> None:
     while True:
-        now = datetime.utcnow().strftime("%H:%M")
+        now = datetime.now(timezone.utc).strftime("%H:%M")
         try:
             async with AsyncSessionLocal() as db:
                 result = await db.execute(

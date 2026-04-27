@@ -35,7 +35,11 @@ async def lifespan(app: FastAPI):
     yield
 
     # ── Shutdown ──────────────────────────────────────────────────────────────
-    digest_task.cancel()
+    try:
+        digest_task.cancel()
+        await digest_task
+    except asyncio.CancelledError:
+        pass
     logger.info("Newsly shutting down.")
 
 
@@ -53,10 +57,17 @@ app = FastAPI(
 )
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
-# Tighten `allow_origins` in production to your actual front-end domains.
+# In production, replace with actual frontend domain(s)
+cors_origins = [
+    "http://localhost:3000",  # Local development
+    "http://localhost:8000",  # Local backend access
+]
+# For Render/production, add your frontend domain:
+# cors_origins.extend(["https://newsly.vercel.app", "https://yourdomain.com"])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins if cors_origins else ["*"],  # Fallback to * only if empty
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

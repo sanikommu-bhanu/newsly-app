@@ -1,23 +1,27 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Use a custom build directory to avoid OneDrive readlink issues on .next
-  // in this Windows environment.
-  distDir: '.next-dev',
+  // Use standard build directory for Vercel; the .next-dev was for local OneDrive workaround
+  distDir: process.env.VERCEL ? '.next' : '.next-dev',
   images: {
-    // Allow any external image hostname so news images from BBC, Reuters,
-    // The Hindu, and other sources never 404.
+    // Restrict to known news source domains for better performance and security
     remotePatterns: [
-      { protocol: 'https', hostname: '**' },
-      { protocol: 'http',  hostname: '**' },
+      { protocol: 'https', hostname: '*.unsplash.com' },
+      { protocol: 'https', hostname: 'unsplash.com' },
+      { protocol: 'https', hostname: 'ichef.bbci.co.uk' },
+      { protocol: 'https', hostname: 'www.bbc.com' },
+      { protocol: 'https', hostname: 'bbc.com' },
+      { protocol: 'https', hostname: 'www.thehindu.com' },
+      { protocol: 'https', hostname: 'thehindu.com' },
+      { protocol: 'https', hostname: 'www.reuters.com' },
+      { protocol: 'https', hostname: 'reuters.com' },
     ],
-    // Disable Next.js image optimisation for externally-hosted images
-    // (avoids 400 errors when source domains block the optimiser).
-    unoptimized: true,
+    // Enable image optimization for better performance
+    unoptimized: process.env.NODE_ENV === 'development',
   },
-  // Silence noisy "img" ESLint rule — we intentionally use <img> for
-  // external news images with onError fallback handling.
+  // Enable ESLint during builds — catch errors early
   eslint: {
-    ignoreDuringBuilds: true,
+    dirs: ['app', 'components', 'lib'],
+    ignoreDuringBuilds: false,
   },
 }
 

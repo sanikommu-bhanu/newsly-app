@@ -1,0 +1,33 @@
+{
+  "$schema": "https://vercel.com/schemas/vercel.json",
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "env": [
+    {
+      "key": "NEXT_PUBLIC_API_URL",
+      "description": "Backend API URL",
+      "value": "http://localhost:8000",
+      "preview": "https://api.newsly.dev",
+      "production": "https://api.newsly.com"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=60, stale-while-revalidate=300"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/docs",
+      "destination": "/",
+      "permanent": false
+    }
+  ]
+}
