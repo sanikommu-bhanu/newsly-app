@@ -3,15 +3,6 @@
   "buildCommand": "next build",
   "outputDirectory": ".next",
   "framework": "nextjs",
-  "env": [
-    {
-      "key": "NEXT_PUBLIC_API_URL",
-      "description": "Backend API URL",
-      "value": "http://localhost:8000",
-      "preview": "https://api.newsly.dev",
-      "production": "https://api.newsly.com"
-    }
-  ],
   "headers": [
     {
       "source": "/api/:path*",
