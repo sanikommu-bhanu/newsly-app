@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { RefreshCw, MapPin } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { fetchEditorPicks, fetchNews, fetchRecommendations, fetchTrending } from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 import type { Article } from '@/types'
 
@@ -20,7 +21,7 @@ import NewslyLogo from '@/components/NewslyLogo'
 
 export default function HomePage() {
   const router = useRouter()
-  const { user, token, location, categories, onboardingComplete } = useStore()
+  const { user, token, location, categories, onboardingComplete, language } = useStore()
 
   const [activeCategory, setActiveCategory] = useState('All')
   const [articles, setArticles] = useState<Article[]>([])
@@ -196,7 +197,7 @@ export default function HomePage() {
             {trending.length > 0 && (
               <>
                 <p className="mb-2 mt-2 px-1 text-[11px] font-sans font-semibold uppercase tracking-widest text-muted dark:text-gray-500">
-                  Trending now
+                  {t(language, 'trending')}
                 </p>
                 <div className="space-y-3">
                   {trending.slice(0, 2).map((article, i) => (
@@ -208,7 +209,7 @@ export default function HomePage() {
             {editorPicks.length > 0 && (
               <>
                 <p className="mb-2 mt-4 px-1 text-[11px] font-sans font-semibold uppercase tracking-widest text-muted dark:text-gray-500">
-                  Editor&apos;s picks
+                  {t(language, 'editorPicks')}
                 </p>
                 <div className="space-y-3">
                   {editorPicks.slice(0, 2).map((article, i) => (
@@ -220,7 +221,7 @@ export default function HomePage() {
             {recommended.length > 0 && (
               <>
                 <p className="mb-2 mt-4 px-1 text-[11px] font-sans font-semibold uppercase tracking-widest text-muted dark:text-gray-500">
-                  Recommended for you
+                  {t(language, 'recommendations')}
                 </p>
                 <div className="space-y-3">
                   {recommended.slice(0, 2).map((article, i) => (

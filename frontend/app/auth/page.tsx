@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff, ArrowLeft, AlertCircle } from 'lucide-react'
-import { login, signup } from '@/lib/api'
+import { fetchProfile, login, signup, socialGoogleLogin } from '@/lib/api'
 import { useStore } from '@/lib/store'
 import ThemeSync from '@/components/ThemeSync'
 
@@ -25,6 +25,32 @@ function AuthForm() {
   const [acceptedLegal, setAcceptedLegal] = useState(false)
 
   const update = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }))
+
+  const handleGoogleLogin = async () => {
+    setError('')
+    const idToken = window.prompt('Paste your Google ID token')
+    if (!idToken) return
+    setLoading(true)
+    try {
+      const res = await socialGoogleLogin(idToken.trim())
+      const profile = await fetchProfile(res.access_token)
+      setAuth(
+        {
+          id: profile.user_id,
+          email: profile.email,
+          username: profile.username,
+        },
+        res.access_token
+      )
+      setLegalAccepted(true)
+      router.push('/onboarding')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in failed.'
+      setError(msg)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async () => {
     setError('')
@@ -97,9 +123,9 @@ function AuthForm() {
       </motion.div>
 
       <div className="space-y-3.5">
-        {/* Google (UI only) */}
+        {/* Google */}
         <button
-          onClick={() => setError('Google sign-in is coming soon.')}
+          onClick={handleGoogleLogin}
           className="w-full flex items-center justify-center gap-3 bg-white dark:bg-dark-surface border border-border dark:border-dark-border rounded-xl py-3.5 text-sm font-sans font-medium text-ink dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-dark-border transition-colors press-effect shadow-card"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">

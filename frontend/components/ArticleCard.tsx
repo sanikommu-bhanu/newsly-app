@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Bookmark } from 'lucide-react'
+import { Bookmark, Share2 } from 'lucide-react'
 import { cn, relativeTime, getCategoryColor, sourceCredibility } from '@/lib/utils'
 import InsightTag from './InsightTag'
 import { useStore } from '@/lib/store'
@@ -75,7 +75,7 @@ export default function ArticleCard({
   index = 0,
   featured = false,
 }: ArticleCardProps) {
-  const { aiEnabled, toggleBookmark, isBookmarked, token } = useStore()
+  const { aiEnabled, toggleBookmark, isBookmarked, token, trackShare } = useStore()
   // Track per-card image load failure
   const [imgError, setImgError] = useState(false)
   const bookmarked = isBookmarked(article.id)
@@ -152,6 +152,40 @@ export default function ArticleCard({
             )}
             <button
               type="button"
+              onClick={async (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                const sharePayload = {
+                  title: article.title,
+                  text: article.description ?? 'Read this article on Newsly',
+                  url: article.article_url,
+                }
+                try {
+                  if (navigator.share) {
+                    await navigator.share(sharePayload)
+                  } else {
+                    await navigator.clipboard.writeText(article.article_url)
+                  }
+                  trackShare()
+                  if (token) {
+                    void trackInteraction(token, {
+                      article_id: article.id,
+                      action: 'share',
+                      category: article.category,
+                      source: article.source,
+                    }).catch(() => {})
+                  }
+                } catch {
+                  // User canceled share sheet or clipboard write failed.
+                }
+              }}
+              aria-label="Share article"
+              className="absolute top-2.5 left-2.5 w-8 h-8 rounded-full border bg-white/85 dark:bg-dark-surface/85 text-muted dark:text-gray-300 border-border dark:border-dark-border backdrop-blur-sm flex items-center justify-center transition-colors"
+            >
+              <Share2 size={14} />
+            </button>
+            <button
+              type="button"
               onClick={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
@@ -220,9 +254,10 @@ export default function ArticleCard({
                   {article.source}
                 </span>
               </div>
-              <span className="text-xs font-sans text-muted dark:text-gray-500 flex-shrink-0 ml-2">
-                {relativeTime(article.published_at)}
-              </span>
+              <div className="ml-2 flex flex-col items-end text-xs font-sans text-muted dark:text-gray-500">
+                <span>{relativeTime(article.published_at)}</span>
+                {article.read_time_minutes ? <span>{article.read_time_minutes} min</span> : null}
+              </div>
             </div>
             <div className="mt-2">
               <span

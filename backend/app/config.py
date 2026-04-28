@@ -25,6 +25,15 @@ class Settings(BaseSettings):
     NEWS_API_KEY: Optional[str] = None
     # ── News Cache ────────────────────────────────────────────────────────────
     NEWS_CACHE_TTL: int = 900  # seconds (15 minutes)
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    CORS_ORIGINS: str = (
+        "http://localhost:3000,"
+        "http://localhost:3001,"
+        "http://127.0.0.1:3000,"
+        "http://127.0.0.1:3001,"
+        "https://newsly-seven-jet.vercel.app"
+    )
+    CORS_ORIGIN_REGEX: Optional[str] = r"https://.*\.vercel\.app"
 
 
 settings = Settings()

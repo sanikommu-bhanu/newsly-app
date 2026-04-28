@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
 from app.database import init_db
 from app.news.service import refresh_articles
 from app.auth.router import router as auth_router
@@ -19,6 +20,16 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("newsly")
+
+
+def _parse_cors_origins(raw: str) -> list[str]:
+    origins: list[str] = []
+    for item in raw.split(","):
+        origin = item.strip().rstrip("/")
+        if origin:
+            origins.append(origin)
+    # Preserve order while removing duplicates
+    return list(dict.fromkeys(origins))
 
 
 @asynccontextmanager
@@ -57,17 +68,16 @@ app = FastAPI(
 )
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
-# In production, replace with actual frontend domain(s)
-cors_origins = [
-    "http://localhost:3000",  # Local development
-    "http://localhost:8000",  # Local backend access
-]
-# For Render/production, add your frontend domain:
-cors_origins.extend(["https://newsly-seven-jet.vercel.app/"])
+cors_origins = _parse_cors_origins(settings.CORS_ORIGINS)
+cors_origin_regex = settings.CORS_ORIGIN_REGEX or None
+logger.info("CORS origins: %s", cors_origins)
+if cors_origin_regex:
+    logger.info("CORS regex: %s", cors_origin_regex)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins if cors_origins else ["*"],  # Fallback to * only if empty
+    allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

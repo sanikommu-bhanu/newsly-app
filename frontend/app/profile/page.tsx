@@ -9,7 +9,9 @@ import {
   fetchFollows,
   fetchProfile,
   followTopic,
+  followUser,
   unfollowTopic,
+  unfollowUser,
   updateProfile,
 } from '@/lib/api'
 import { useStore } from '@/lib/store'
@@ -30,6 +32,7 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [followUserInput, setFollowUserInput] = useState('')
 
   useEffect(() => {
     if (!user) router.replace('/')
@@ -54,6 +57,10 @@ export default function ProfilePage() {
 
   const followedTopics = useMemo(
     () => new Set(follows.filter((f) => f.follow_type === 'topic').map((f) => f.target)),
+    [follows]
+  )
+  const followedUsers = useMemo(
+    () => follows.filter((f) => f.follow_type === 'user').map((f) => f.target),
     [follows]
   )
 
@@ -122,8 +129,35 @@ export default function ProfilePage() {
       }
       const refreshed = await fetchFollows(token)
       setFollows(refreshed)
-    } catch {
-      // keep UI responsive; error shown by next refresh if needed
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to update followed topics.'
+      setError(msg)
+    }
+  }
+
+  const addUserFollow = async () => {
+    if (!token || !followUserInput.trim()) return
+    const target = followUserInput.trim()
+    try {
+      await followUser(token, target)
+      const refreshed = await fetchFollows(token)
+      setFollows(refreshed)
+      setFollowUserInput('')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to follow user.'
+      setError(msg)
+    }
+  }
+
+  const removeUserFollow = async (target: string) => {
+    if (!token) return
+    try {
+      await unfollowUser(token, target)
+      const refreshed = await fetchFollows(token)
+      setFollows(refreshed)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to unfollow user.'
+      setError(msg)
     }
   }
 
@@ -193,6 +227,41 @@ export default function ProfilePage() {
                     </button>
                   )
                 })}
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-white p-4 dark:border-dark-border dark:bg-dark-surface">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted dark:text-gray-500">
+                Follow users
+              </p>
+              <div className="flex gap-2">
+                <input
+                  value={followUserInput}
+                  onChange={(e) => setFollowUserInput(e.target.value)}
+                  placeholder="Username"
+                  className="w-full rounded-lg border border-border px-3 py-2 text-sm dark:border-dark-border dark:bg-dark-bg"
+                />
+                <button
+                  onClick={addUserFollow}
+                  className="rounded-lg bg-ink px-3 py-2 text-sm font-semibold text-white dark:bg-white dark:text-ink"
+                >
+                  Follow
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {followedUsers.length === 0 ? (
+                  <span className="text-xs text-muted dark:text-gray-500">No users followed yet.</span>
+                ) : (
+                  followedUsers.map((target) => (
+                    <button
+                      key={target}
+                      onClick={() => removeUserFollow(target)}
+                      className="rounded-full border border-border px-3 py-1 text-xs font-medium dark:border-dark-border"
+                    >
+                      @{target} · Unfollow
+                    </button>
+                  ))
+                )}
               </div>
             </section>
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Search, X } from 'lucide-react'
+import { t } from '@/lib/i18n'
 import { useStore } from '@/lib/store'
 import { fetchNews } from '@/lib/api'
 import { cn, getCategoryColor } from '@/lib/utils'
@@ -29,7 +30,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 export default function ExplorePage() {
   const router = useRouter()
-  const { user, token } = useStore()
+  const { user, token, language } = useStore()
 
   const [selectedCat, setSelectedCat] = useState<string | null>(null)
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null)
@@ -111,7 +112,7 @@ export default function ExplorePage() {
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 bg-[#FAFAFA]/90 dark:bg-dark-bg/90 backdrop-blur-md px-5 pt-12 pb-4">
         <h1 className="font-display text-2xl font-semibold text-ink dark:text-white mb-4">
-          Explore
+          {t(language, 'explore')}
         </h1>
 
         {/* Search bar */}

@@ -1,14 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ExternalLink, Clock, Share2, Bookmark } from 'lucide-react'
-import { fetchArticle, fetchNews, removeBookmark, trackInteraction, upsertBookmark } from '@/lib/api'
+import {
+  fetchArticle,
+  fetchNews,
+  fetchComments,
+  fetchRelated,
+  postComment,
+  removeBookmark,
+  trackInteraction,
+  upsertBookmark,
+} from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { relativeTime, getCategoryColor, cn, sourceCredibility } from '@/lib/utils'
 import { useStore } from '@/lib/store'
-import type { Article } from '@/types'
+import type { Article, ArticleComment } from '@/types'
 
 import ThemeSync from '@/components/ThemeSync'
 import InsightTag from '@/components/InsightTag'
@@ -132,10 +142,14 @@ export default function ArticlePage() {
     trackArticleRead,
     trackShare,
     token,
+    language,
   } = useStore()
 
   const [article, setArticle] = useState<Article | null>(null)
   const [related, setRelated] = useState<Article[]>([])
+  const [comments, setComments] = useState<ArticleComment[]>([])
+  const [commentText, setCommentText] = useState('')
+  const [commentLoading, setCommentLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -159,11 +173,21 @@ export default function ArticlePage() {
 
   useEffect(() => {
     if (!article) return
-    fetchNews({ category: article.category, page: 1, limit: 6 })
-      .then((res) => {
-        setRelated(res.articles.filter((a) => a.id !== article.id).slice(0, 3))
+    fetchRelated(article.id, 3)
+      .then(async (rows) => {
+        if (rows.length > 0) {
+          setRelated(rows)
+          return
+        }
+        const fallback = await fetchNews({ category: article.category, page: 1, limit: 6 })
+        setRelated(fallback.articles.filter((a) => a.id !== article.id).slice(0, 3))
       })
       .catch(() => setRelated([]))
+  }, [article])
+
+  useEffect(() => {
+    if (!article) return
+    fetchComments(article.id).then(setComments).catch(() => setComments([]))
   }, [article])
 
   const handleShare = async () => {
@@ -190,6 +214,25 @@ export default function ArticlePage() {
       }
     } catch {
       // User canceled share sheet or clipboard write failed.
+    }
+  }
+
+  const onCommentSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (!token || !article || !commentText.trim()) return
+    try {
+      setCommentLoading(true)
+      const created = await postComment(article.id, commentText.trim(), token)
+      setComments((prev) => [created, ...prev])
+      void trackInteraction(token, {
+        article_id: article.id,
+        action: 'comment',
+        category: article.category,
+        source: article.source,
+      }).catch(() => {})
+      setCommentText('')
+    } finally {
+      setCommentLoading(false)
     }
   }
 
@@ -295,7 +338,7 @@ export default function ArticlePage() {
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-white px-3 py-1.5 text-xs font-sans font-medium text-ink dark:border-dark-border dark:bg-dark-surface dark:text-white"
             >
               <Share2 size={12} />
-              Share
+              {t(language, 'share')}
             </button>
             <button
               onClick={() => {
@@ -342,6 +385,11 @@ export default function ArticlePage() {
               <Clock size={11} strokeWidth={2} />
               <span className="text-xs font-sans">{relativeTime(article.published_at)}</span>
             </div>
+            {article.read_time_minutes ? (
+              <span className="text-xs font-sans text-muted dark:text-gray-500">
+                {article.read_time_minutes} min read
+              </span>
+            ) : null}
             {article.region && article.region !== 'Global' && (
               <span className="text-xs font-sans text-muted dark:text-gray-500 bg-gray-100 dark:bg-dark-surface px-2 py-0.5 rounded-full">
                 {article.region}
@@ -427,6 +475,49 @@ export default function ArticlePage() {
               Opens {article.source} in your browser
             </p>
           </div>
+
+          <section className="mb-6">
+            <p className="mb-2 text-[11px] font-sans font-semibold uppercase tracking-widest text-muted dark:text-gray-500">
+              {t(language, 'comments')}
+            </p>
+            {token ? (
+              <form onSubmit={onCommentSubmit} className="mb-3 space-y-2">
+                <textarea
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Share your thoughts…"
+                  rows={3}
+                  className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm font-sans text-ink outline-none dark:border-dark-border dark:bg-dark-surface dark:text-white"
+                />
+                <button
+                  type="submit"
+                  disabled={commentLoading || !commentText.trim()}
+                  className="rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60 dark:bg-white dark:text-ink"
+                >
+                  {commentLoading ? 'Posting...' : t(language, 'post')}
+                </button>
+              </form>
+            ) : (
+              <p className="mb-3 text-xs font-sans text-muted dark:text-gray-500">Log in to comment.</p>
+            )}
+            <div className="space-y-2">
+              {comments.length === 0 ? (
+                <p className="text-xs font-sans text-muted dark:text-gray-500">No comments yet.</p>
+              ) : (
+                comments.map((comment) => (
+                  <div
+                    key={comment.id}
+                    className="rounded-xl border border-border bg-white px-3 py-2 dark:border-dark-border dark:bg-dark-surface"
+                  >
+                    <p className="text-xs font-sans text-muted dark:text-gray-500">
+                      {comment.username} • {relativeTime(comment.created_at)}
+                    </p>
+                    <p className="mt-1 text-sm font-sans text-ink dark:text-gray-100">{comment.body}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
 
           {related.length > 0 && (
             <section className="mb-6">

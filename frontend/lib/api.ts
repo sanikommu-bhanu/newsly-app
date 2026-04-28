@@ -14,7 +14,7 @@ import type {
   UserPreferences,
 } from '@/types'
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+const API = (process.env.NEXT_PUBLIC_API_URL?.trim() || 'http://localhost:8000').replace(/\/+$/, '')
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -23,14 +23,22 @@ async function apiFetch<T>(
   options: RequestInit = {},
   token?: string | null
 ): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    })
+  } catch (error: unknown) {
+    if (error instanceof TypeError) {
+      throw new Error(`Cannot reach API at ${API}. Check NEXT_PUBLIC_API_URL and backend CORS settings.`)
+    }
+    throw error
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail ?? `HTTP ${res.status}`)
@@ -152,7 +160,13 @@ export async function fetchRecommendations(token: string, limit = 10): Promise<A
 }
 
 export async function fetchRelated(articleId: string, limit = 3): Promise<Article[]> {
-  return apiFetch<Article[]>(`/news/${articleId}/related?limit=${limit}`)
+  try {
+    const rows = await apiFetch<Article[]>(`/news/${articleId}/related?limit=${limit}`)
+    if (rows.length > 0) return rows
+  } catch {
+    // Fall back to local suggestions below.
+  }
+  return MOCK_ARTICLES.filter((a) => a.id !== articleId).slice(0, limit)
 }
 
 export async function fetchComments(articleId: string): Promise<ArticleComment[]> {
@@ -222,6 +236,14 @@ export async function followTopic(token: string, target: string): Promise<void> 
 
 export async function unfollowTopic(token: string, target: string): Promise<void> {
   await apiFetch(`/user/follows?follow_type=topic&target=${encodeURIComponent(target)}`, { method: 'DELETE' }, token)
+}
+
+export async function followUser(token: string, target: string): Promise<void> {
+  await apiFetch('/user/follows', { method: 'POST', body: JSON.stringify({ follow_type: 'user', target }) }, token)
+}
+
+export async function unfollowUser(token: string, target: string): Promise<void> {
+  await apiFetch(`/user/follows?follow_type=user&target=${encodeURIComponent(target)}`, { method: 'DELETE' }, token)
 }
 
 export async function fetchBookmarks(token: string): Promise<Article[]> {
