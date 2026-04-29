@@ -1,0 +1,183 @@
+[
+  {
+    "step": 1,
+    "name": "GET frontend routes",
+    "pass": true,
+    "status_codes": {
+      "/": 200,
+      "/auth": 200,
+      "/explore": 200,
+      "/settings": 200,
+      "/profile": 200
+    },
+    "assertion": "all 200",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 2,
+    "name": "GET /health",
+    "pass": true,
+    "status_codes": {
+      "/health": 200
+    },
+    "assertion": "200 and status ok",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 3,
+    "name": "Signup",
+    "pass": true,
+    "status_codes": {
+      "/auth/signup": 201
+    },
+    "assertion": "token returned",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 4,
+    "name": "Login",
+    "pass": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWY5N2QzMC1jZTg5LTQ4ZDItODkyYi1jMWRkNDhjYWZmZGYiLCJlbWFpbCI6ImxpdmV1c2VyXzE3NzczODEyODhfNmJhNTdkYzNAZXhhbXBsZS5jb20iLCJleHAiOjE3NzczODQ4OTF9.IPX_Dy_pMny3d-sQbFF_RSTUKpwfYPG2IB1_VVrjidQ",
+    "status_codes": {
+      "/auth/login": 200
+    },
+    "assertion": "token returned",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 5,
+    "name": "GET /news?limit=5",
+    "pass": true,
+    "status_codes": {
+      "/news": 200
+    },
+    "assertion": ">=1 article",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 6,
+    "name": "GET /article/{id}",
+    "pass": true,
+    "status_codes": {
+      "/article/{id}": 200
+    },
+    "assertion": "200",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 7,
+    "name": "GET /news/{id}/related",
+    "pass": true,
+    "status_codes": {
+      "/news/{id}/related": 200
+    },
+    "assertion": "200 + list",
+    "failure_body": null,
+    "details": {
+      "related_count": 3
+    }
+  },
+  {
+    "step": 8,
+    "name": "POST comment",
+    "pass": true,
+    "status_codes": {
+      "POST /article/{id}/comments": 200
+    },
+    "assertion": "comment created",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 9,
+    "name": "GET comments",
+    "pass": true,
+    "status_codes": {
+      "GET /article/{id}/comments": 200
+    },
+    "assertion": "contains posted comment",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 10,
+    "name": "Bookmark flow",
+    "pass": true,
+    "status_codes": {
+      "POST /user/bookmarks": 200,
+      "GET /user/bookmarks": 200,
+      "GET /user/bookmarks/export": 200
+    },
+    "assertion": "post/get/export",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 11,
+    "name": "Profile flow",
+    "pass": true,
+    "status_codes": {
+      "GET /user/profile": 200,
+      "PATCH /user/profile": 200
+    },
+    "assertion": "get + patch persisted",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 12,
+    "name": "Follow flow",
+    "pass": true,
+    "status_codes": {
+      "POST topic": 200,
+      "POST user": 200,
+      "GET /user/follows": 200
+    },
+    "assertion": "topic+user listed",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 13,
+    "name": "Notifications/digest/custom-feeds",
+    "pass": true,
+    "status_codes": {
+      "GET /user/notifications": 200,
+      "GET /user/newsletter/digest": 200,
+      "POST /user/custom-feeds": 200,
+      "GET /user/custom-feeds": 200
+    },
+    "assertion": "basic checks",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 14,
+    "name": "Change password flow",
+    "pass": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NWY5N2QzMC1jZTg5LTQ4ZDItODkyYi1jMWRkNDhjYWZmZGYiLCJlbWFpbCI6ImxpdmV1c2VyXzE3NzczODEyODhfNmJhNTdkYzNAZXhhbXBsZS5jb20iLCJleHAiOjE3NzczODQ4OTR9.rkbYmZk3bZT8d_44B1ArPE3QYzFkfzF6QKfBC_PXdMA",
+    "status_codes": {
+      "POST /user/change-password": 200,
+      "POST /auth/login (new pw)": 200
+    },
+    "assertion": "change + login with new",
+    "failure_body": null,
+    "details": null
+  },
+  {
+    "step": 15,
+    "name": "Delete account flow",
+    "pass": true,
+    "status_codes": {
+      "DELETE /user/account": 200,
+      "POST /auth/login after delete": 401
+    },
+    "assertion": "delete then login fails",
+    "failure_body": null,
+    "details": null
+  }
+]
