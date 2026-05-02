@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { BookmarkCheck, Download } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { fetchBookmarks, getBookmarkExportUrl } from '@/lib/api'
+import { getSavedArticles, replaceSavedArticles } from '@/lib/bookmarks'
 import { t } from '@/lib/i18n'
 import ThemeSync from '@/components/ThemeSync'
 import BottomNav from '@/components/BottomNav'
@@ -20,9 +21,16 @@ export default function BookmarksPage() {
   }, [user, router])
 
   useEffect(() => {
+    const local = getSavedArticles()
+    if (local.length > 0) {
+      setBookmarks(local)
+    }
     if (!token) return
     fetchBookmarks(token)
-      .then(setBookmarks)
+      .then((remote) => {
+        const merged = replaceSavedArticles([...remote, ...getSavedArticles()])
+        setBookmarks(merged)
+      })
       .catch(() => {})
   }, [token, setBookmarks])
 

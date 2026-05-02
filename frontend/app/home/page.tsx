@@ -21,7 +21,7 @@ import NewslyLogo from '@/components/NewslyLogo'
 
 export default function HomePage() {
   const router = useRouter()
-  const { user, token, location, categories, onboardingComplete, language } = useStore()
+  const { user, token, location, categories, onboardingComplete, language, pushAlerts } = useStore()
 
   const [activeCategory, setActiveCategory] = useState('All')
   const [articles, setArticles] = useState<Article[]>([])
@@ -36,7 +36,11 @@ export default function HomePage() {
   const [trending, setTrending] = useState<Article[]>([])
   const [editorPicks, setEditorPicks] = useState<Article[]>([])
   const [recommended, setRecommended] = useState<Article[]>([])
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
+  const [isOffline, setIsOffline] = useState(false)
   const loaderRef = useRef<HTMLDivElement>(null)
+  const latestNotifiedIdRef = useRef<string | null>(null)
+  const loadInFlightRef = useRef(false)
 
   // Auth guard — small delay to let Zustand hydrate from localStorage
   useEffect(() => {
@@ -48,7 +52,9 @@ export default function HomePage() {
   }, [user, onboardingComplete, router])
 
   const load = useCallback(
-    async (cat: string, pg: number, reset: boolean) => {
+    async (cat: string, pg: number, reset: boolean, forceRefresh = false) => {
+      if (loadInFlightRef.current) return
+      loadInFlightRef.current = true
       if (pg === 1) setLoading(true)
       else setLoadingMore(true)
       setErrorType(null)
@@ -62,6 +68,7 @@ export default function HomePage() {
           token,
           // Pass user categories so the ranking function can prioritise them
           userCategories: categories,
+          forceRefresh,
         })
 
         setTotal(res.total)
@@ -70,9 +77,13 @@ export default function HomePage() {
         } else {
           setArticles((prev) => [...prev, ...res.articles])
         }
+        if (pg === 1) {
+          setLastSyncedAt(Date.now())
+        }
       } catch {
         setErrorType('error')
       } finally {
+        loadInFlightRef.current = false
         setLoading(false)
         setLoadingMore(false)
         setRefreshing(false)
@@ -85,8 +96,31 @@ export default function HomePage() {
   // Load on category change
   useEffect(() => {
     setPage(1)
-    load(activeCategory, 1, true)
+    load(activeCategory, 1, true, false)
   }, [activeCategory, load])
+
+  // Keep feed fresh in the background so users see new stories automatically.
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      if (typeof navigator !== 'undefined' && !navigator.onLine) return
+      void load(activeCategory, 1, true, true)
+    }, 90_000)
+    return () => window.clearInterval(interval)
+  }, [activeCategory, load])
+
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      setIsOffline(!navigator.onLine)
+    }
+    updateOnlineStatus()
+    window.addEventListener('online', updateOnlineStatus)
+    window.addEventListener('offline', updateOnlineStatus)
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus)
+      window.removeEventListener('offline', updateOnlineStatus)
+    }
+  }, [])
 
   useEffect(() => {
     fetchTrending(4).then(setTrending).catch(() => setTrending([]))
@@ -107,7 +141,7 @@ export default function HomePage() {
         if (entry.isIntersecting && !loadingMore && articles.length < total) {
           const nextPage = page + 1
           setPage(nextPage)
-          load(activeCategory, nextPage, false)
+          load(activeCategory, nextPage, false, false)
         }
       },
       { threshold: 0.1 }
@@ -117,16 +151,41 @@ export default function HomePage() {
   }, [loadingMore, articles.length, total, page, activeCategory, load])
 
   const handleRefresh = () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setErrorType('error')
+      return
+    }
     setRefreshing(true)
     setPage(1)
-    load(activeCategory, 1, true)
+    void load(activeCategory, 1, true, true)
   }
 
   const handleRetry = () => {
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setErrorType('error')
+      return
+    }
     setRetrying(true)
     setPage(1)
-    load(activeCategory, 1, true)
+    void load(activeCategory, 1, true, true)
   }
+  useEffect(() => {
+    if (!pushAlerts || articles.length === 0 || typeof window === 'undefined') return
+    const newest = articles[0]
+    if (!newest?.id) return
+    if (!latestNotifiedIdRef.current) {
+      latestNotifiedIdRef.current = newest.id
+      return
+    }
+    if (latestNotifiedIdRef.current === newest.id) return
+    latestNotifiedIdRef.current = newest.id
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('New story on Newsly', {
+        body: newest.title,
+      })
+    }
+  }, [articles, pushAlerts])
+
 
   const handleCategoryChange = (cat: string) => {
     setActiveCategory(cat)
@@ -150,6 +209,13 @@ export default function HomePage() {
                 </span>
               </div>
             )}
+            <p className="mt-1 text-[11px] font-sans text-muted dark:text-gray-500">
+              {isOffline
+                ? 'Offline mode'
+                : lastSyncedAt
+                  ? `Synced ${Math.max(0, Math.round((Date.now() - lastSyncedAt) / 1000))}s ago`
+                  : 'Syncing...'}
+            </p>
           </div>
 
           <button

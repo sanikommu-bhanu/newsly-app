@@ -3,6 +3,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { Article, LanguageCode, User } from '@/types'
+import { getSavedArticles, removeArticle, replaceSavedArticles, saveArticle } from '@/lib/bookmarks'
 
 type UsageAnalytics = {
   sessions: number
@@ -126,17 +127,18 @@ export const useStore = create<NewslyState>()(
         set((s) => {
           const exists = s.bookmarks.some((a) => a.id === article.id)
           if (exists) {
-            return { bookmarks: s.bookmarks.filter((a) => a.id !== article.id) }
+            return { bookmarks: removeArticle(article.id) }
           }
+          const next = saveArticle(article)
           return {
-            bookmarks: [article, ...s.bookmarks].slice(0, 100),
+            bookmarks: next,
             analytics: {
               ...s.analytics,
               bookmarksAdded: s.analytics.bookmarksAdded + 1,
             },
           }
         }),
-      setBookmarks: (items) => set({ bookmarks: items }),
+      setBookmarks: (items) => set({ bookmarks: replaceSavedArticles(items) }),
       isBookmarked: (articleId) =>
         get().bookmarks.some((a) => a.id === articleId),
       trackArticleRead: () =>
@@ -151,6 +153,13 @@ export const useStore = create<NewslyState>()(
     {
       name: 'newsly-v1',
       storage: createJSONStorage(() => localStorage),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return
+        const localBookmarks = getSavedArticles()
+        if (localBookmarks.length > 0) {
+          state.setBookmarks(localBookmarks)
+        }
+      },
     }
   )
 )

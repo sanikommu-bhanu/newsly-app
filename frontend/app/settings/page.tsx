@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Bell, Globe, LogOut, Mail, Moon, Plus, Sun, Trash2, Zap } from 'lucide-react'
@@ -46,6 +46,11 @@ export default function SettingsPage() {
   const [feedUrl, setFeedUrl] = useState('')
   const [feedName, setFeedName] = useState('')
   const [saving, setSaving] = useState(false)
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
+  const [isOffline, setIsOffline] = useState(false)
+  const [syncIssue, setSyncIssue] = useState<string | null>(null)
+  const latestNotificationIdRef = useRef<string | null>(null)
+  const pollingInFlightRef = useRef(false)
 
   useEffect(() => {
     if (!user) router.replace('/')
@@ -53,10 +58,90 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!token) return
-    fetchDigestPreview(token).then(setDigest).catch(() => setDigest(null))
-    fetchNotifications(token).then(setNotifications).catch(() => setNotifications([]))
-    fetchCustomFeeds(token).then(setCustomFeeds).catch(() => setCustomFeeds([]))
+
+    const loadDashboardData = async (): Promise<boolean> => {
+      if (pollingInFlightRef.current) return false
+      pollingInFlightRef.current = true
+      try {
+        const [nextDigest, nextFeeds, rows] = await Promise.all([
+          fetchDigestPreview(token),
+          fetchCustomFeeds(token),
+          fetchNotifications(token),
+        ])
+        setDigest(nextDigest)
+        setCustomFeeds(nextFeeds)
+        setNotifications(rows)
+        if (rows.length > 0 && !latestNotificationIdRef.current) {
+          latestNotificationIdRef.current = rows[0].id
+        }
+        setSyncIssue(null)
+        setLastSyncedAt(Date.now())
+        return true
+      } catch {
+        setSyncIssue('Live sync delayed. Retrying in background.')
+        return false
+      } finally {
+        pollingInFlightRef.current = false
+      }
+    }
+
+    let cancelled = false
+    let timeoutId: number | null = null
+    let nextDelayMs = 45_000
+    const schedule = () => {
+      if (cancelled) return
+      timeoutId = window.setTimeout(() => {
+        void tick()
+      }, nextDelayMs)
+    }
+    const tick = async () => {
+      if (cancelled) return
+      if (document.visibilityState !== 'visible' || !navigator.onLine) {
+        nextDelayMs = 45_000
+        schedule()
+        return
+      }
+      const ok = await loadDashboardData()
+      nextDelayMs = ok ? 45_000 : Math.min(nextDelayMs * 2, 240_000)
+      schedule()
+    }
+
+    void tick()
+    return () => {
+      cancelled = true
+      if (timeoutId) window.clearTimeout(timeoutId)
+    }
   }, [token])
+
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      setIsOffline(!navigator.onLine)
+    }
+    updateOnlineStatus()
+    window.addEventListener('online', updateOnlineStatus)
+    window.addEventListener('offline', updateOnlineStatus)
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus)
+      window.removeEventListener('offline', updateOnlineStatus)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!pushAlerts || notifications.length === 0 || typeof window === 'undefined') return
+    const latest = notifications[0]
+    if (!latest?.id) return
+    if (!latestNotificationIdRef.current) {
+      latestNotificationIdRef.current = latest.id
+      return
+    }
+    if (latestNotificationIdRef.current === latest.id) return
+    latestNotificationIdRef.current = latest.id
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('Newsly update', {
+        body: latest.message,
+      })
+    }
+  }, [notifications, pushAlerts])
 
   const handleLogout = () => {
     logout()
@@ -65,40 +150,51 @@ export default function SettingsPage() {
 
   const handlePushToggle = async () => {
     const next = !pushAlerts
-    if (next && 'Notification' in window) {
-      const permission = await Notification.requestPermission()
+    if (next && typeof window !== 'undefined' && 'Notification' in window) {
+      const permission =
+        Notification.permission === 'granted'
+          ? 'granted'
+          : await Notification.requestPermission()
       if (permission !== 'granted') return
       new Notification('Newsly push alerts enabled')
     }
     setAlerts({ pushAlerts: next })
-    if (token) {
-      await savePreferences(
-        { location, categories, push_alerts: next, email_alerts: emailAlerts },
-        token
-      )
-      if (next) {
-        await sendTestNotification(token, {
-          channel: 'push',
-          message: 'Push alerts enabled for Newsly.',
-        })
+    try {
+      if (token) {
+        await savePreferences(
+          { location, categories, push_alerts: next, email_alerts: emailAlerts },
+          token
+        )
+        if (next) {
+          await sendTestNotification(token, {
+            channel: 'push',
+            message: 'Push alerts enabled for Newsly.',
+          })
+        }
       }
+    } catch {
+      setAlerts({ pushAlerts: !next })
     }
   }
 
   const handleEmailToggle = async () => {
     const next = !emailAlerts
     setAlerts({ emailAlerts: next })
-    if (token) {
-      await savePreferences(
-        { location, categories, email_alerts: next, push_alerts: pushAlerts },
-        token
-      )
-      if (next) {
-        await sendTestNotification(token, {
-          channel: 'email',
-          message: 'Email digest enabled for Newsly.',
-        })
+    try {
+      if (token) {
+        await savePreferences(
+          { location, categories, email_alerts: next, push_alerts: pushAlerts },
+          token
+        )
+        if (next) {
+          await sendTestNotification(token, {
+            channel: 'email',
+            message: 'Email digest enabled for Newsly.',
+          })
+        }
       }
+    } catch {
+      setAlerts({ emailAlerts: !next })
     }
   }
 
@@ -142,6 +238,16 @@ export default function SettingsPage() {
         <h1 className="font-display text-2xl font-semibold text-ink dark:text-white">
           {t(language, 'settings')}
         </h1>
+        <p className="mt-1 text-xs font-sans text-muted dark:text-gray-500">
+          {isOffline
+            ? 'Offline mode'
+            : lastSyncedAt
+              ? `Last synced ${Math.max(0, Math.round((Date.now() - lastSyncedAt) / 1000))}s ago`
+              : 'Syncing settings...'}
+        </p>
+        {syncIssue ? (
+          <p className="mt-1 text-xs font-sans text-amber-600 dark:text-amber-400">{syncIssue}</p>
+        ) : null}
       </header>
 
       <main className="space-y-4 px-4">

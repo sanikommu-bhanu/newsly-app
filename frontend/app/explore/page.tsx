@@ -74,13 +74,11 @@ export default function ExplorePage() {
   const handleCatSelect = (cat: string) => {
     const next = selectedCat === cat ? null : cat
     setSelectedCat(next)
-    load(next || undefined, selectedRegion || undefined, query)
   }
 
   const handleRegionSelect = (region: string) => {
     const next = selectedRegion === region ? null : region
     setSelectedRegion(next)
-    load(selectedCat || undefined, next || undefined, query)
   }
 
   const clearFilters = () => {
@@ -99,7 +97,7 @@ export default function ExplorePage() {
     if (!selectedCat && !selectedRegion && !query.trim()) return
     const t = setTimeout(() => {
       load(selectedCat || undefined, selectedRegion || undefined, query.trim() || undefined)
-    }, 240)
+    }, 350)
     return () => clearTimeout(t)
   }, [query, selectedCat, selectedRegion, source, tone, bias, hours, load])
 

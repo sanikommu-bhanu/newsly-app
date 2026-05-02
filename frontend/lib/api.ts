@@ -15,6 +15,10 @@ import type {
 } from '@/types'
 
 const API = (process.env.NEXT_PUBLIC_API_URL?.trim() || 'http://localhost:8000').replace(/\/+$/, '')
+const NEWS_CACHE_TTL_MS = 60_000
+const REQUEST_TIMEOUT_MS = 15_000
+const newsCache = new Map<string, { ts: number; data: NewsResponse }>()
+const inFlightNews = new Map<string, Promise<NewsResponse>>()
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -24,9 +28,12 @@ async function apiFetch<T>(
   token?: string | null
 ): Promise<T> {
   let res: Response
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
     res = await fetch(`${API}${path}`, {
       ...options,
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -34,10 +41,15 @@ async function apiFetch<T>(
       },
     })
   } catch (error: unknown) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s.`)
+    }
     if (error instanceof TypeError) {
       throw new Error(`Cannot reach API at ${API}. Check NEXT_PUBLIC_API_URL and backend CORS settings.`)
     }
     throw error
+  } finally {
+    clearTimeout(timeoutId)
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
@@ -91,57 +103,59 @@ export async function fetchNews(params: {
   token?: string | null
   /** User's selected interest categories — used for client-side ranking */
   userCategories?: string[]
+  forceRefresh?: boolean
 }): Promise<NewsResponse> {
-  try {
-    const q = new URLSearchParams()
-    if (params.category && params.category !== 'All') q.set('category', params.category)
-    if (params.location && params.location !== 'Global') q.set('location', params.location)
-    if (params.q && params.q.trim()) q.set('q', params.q.trim())
-    if (params.source && params.source.trim()) q.set('source', params.source.trim())
-    if (params.tone && params.tone.trim()) q.set('tone', params.tone.trim())
-    if (params.bias && params.bias.trim()) q.set('bias', params.bias.trim())
-    if (params.hours && params.hours > 0) q.set('hours', String(params.hours))
-    q.set('page', String(params.page ?? 1))
-    q.set('limit', String(params.limit ?? 20))
+  const q = new URLSearchParams()
+  if (params.category && params.category !== 'All') q.set('category', params.category)
+  if (params.location && params.location !== 'Global') q.set('location', params.location)
+  if (params.q && params.q.trim()) q.set('q', params.q.trim())
+  if (params.source && params.source.trim()) q.set('source', params.source.trim())
+  if (params.tone && params.tone.trim()) q.set('tone', params.tone.trim())
+  if (params.bias && params.bias.trim()) q.set('bias', params.bias.trim())
+  if (params.hours && params.hours > 0) q.set('hours', String(params.hours))
+  q.set('page', String(params.page ?? 1))
+  q.set('limit', String(params.limit ?? 20))
 
+  const cacheKey = q.toString()
+  const now = Date.now()
+  const cached = newsCache.get(cacheKey)
+  if (!params.forceRefresh && cached && now - cached.ts < NEWS_CACHE_TTL_MS) {
+    return cached.data
+  }
+
+  if (!params.forceRefresh && inFlightNews.has(cacheKey)) {
+    return inFlightNews.get(cacheKey)!
+  }
+
+  const request = (async () => {
     const result = await apiFetch<NewsResponse>(`/news?${q}`, {}, params.token)
-    result.articles = dedupeArticles(result.articles)
+    const normalized = normalizeNewsResponse(result, params.userCategories ?? [], params.location ?? 'Global')
+    newsCache.set(cacheKey, { ts: Date.now(), data: normalized })
+    return normalized
+  })()
 
-    // Apply client-side ranking to live API results too
-    if (params.userCategories || params.location) {
-      result.articles = rankArticles(
-        result.articles,
-        params.userCategories ?? [],
-        params.location ?? 'Global'
-      )
-    }
-
-    return result
-  } catch {
-    // Graceful fallback to mock data when backend is unavailable
-    return getMockNews(
-      params.category,
-      params.location,
-      params.userCategories ?? [],
-      params.page ?? 1,
-      params.limit ?? 20
-    )
+  inFlightNews.set(cacheKey, request)
+  try {
+    return await request
+  } finally {
+    inFlightNews.delete(cacheKey)
   }
 }
 
 export async function fetchArticle(id: string): Promise<Article> {
   try {
-    return await apiFetch<Article>(`/article/${id}`)
+    return normalizeArticle(await apiFetch<Article>(`/article/${id}`))
   } catch {
     const found = MOCK_ARTICLES.find((a) => a.id === id)
     if (!found) throw new Error('Article not found')
-    return found
+    return normalizeArticle(found)
   }
 }
 
 export async function fetchTrending(limit = 8): Promise<Article[]> {
   try {
-    return await apiFetch<Article[]>(`/news/trending?limit=${limit}`)
+    const rows = await apiFetch<Article[]>(`/news/trending?limit=${limit}`)
+    return dedupeArticles(rows.map(normalizeArticle))
   } catch {
     return MOCK_ARTICLES.slice(0, limit)
   }
@@ -149,20 +163,22 @@ export async function fetchTrending(limit = 8): Promise<Article[]> {
 
 export async function fetchEditorPicks(): Promise<Article[]> {
   try {
-    return await apiFetch<Article[]>('/news/editor-picks')
+    const rows = await apiFetch<Article[]>('/news/editor-picks')
+    return dedupeArticles(rows.map(normalizeArticle))
   } catch {
     return []
   }
 }
 
 export async function fetchRecommendations(token: string, limit = 10): Promise<Article[]> {
-  return apiFetch<Article[]>(`/news/recommendations?limit=${limit}`, {}, token)
+  const rows = await apiFetch<Article[]>(`/news/recommendations?limit=${limit}`, {}, token)
+  return dedupeArticles(rows.map(normalizeArticle))
 }
 
 export async function fetchRelated(articleId: string, limit = 3): Promise<Article[]> {
   try {
     const rows = await apiFetch<Article[]>(`/news/${articleId}/related?limit=${limit}`)
-    if (rows.length > 0) return rows
+    if (rows.length > 0) return dedupeArticles(rows.map(normalizeArticle))
   } catch {
     // Fall back to local suggestions below.
   }
@@ -599,12 +615,16 @@ function scoreArticle(
     score += 2
   }
 
-  // Recency — articles published within the last 6 hours get a small boost
-  const hoursOld =
-    (Date.now() - new Date(article.published_at).getTime()) / 3_600_000
-  if (hoursOld < 6) {
-    score += 1
-  }
+  // Recency weighting — heavily favor fresh items so stale stories do not stay pinned.
+  const publishedMs = Date.parse(article.published_at)
+  const hoursOld = Number.isFinite(publishedMs)
+    ? (Date.now() - publishedMs) / 3_600_000
+    : 999
+  if (hoursOld <= 3) score += 4
+  else if (hoursOld <= 6) score += 3
+  else if (hoursOld <= 12) score += 2
+  else if (hoursOld <= 24) score += 1
+  else if (hoursOld > 48) score -= 3
 
   return score
 }
@@ -619,11 +639,13 @@ export function rankArticles(
   userCategories: string[],
   userLocation: string
 ): Article[] {
-  return [...articles].sort(
-    (a, b) =>
+  return [...articles].sort((a, b) => {
+    const scoreDelta =
       scoreArticle(b, userCategories, userLocation) -
       scoreArticle(a, userCategories, userLocation)
-  )
+    if (scoreDelta !== 0) return scoreDelta
+    return Date.parse(b.published_at) - Date.parse(a.published_at)
+  })
 }
 
 function getMockNews(
@@ -664,4 +686,46 @@ function dedupeArticles(articles: Article[]): Article[] {
     out.push(article)
   }
   return out
+}
+
+function normalizeNewsResponse(
+  response: NewsResponse,
+  userCategories: string[],
+  userLocation: string
+): NewsResponse {
+  const normalizedArticles = dedupeArticles(response.articles.map(normalizeArticle))
+  return {
+    ...response,
+    articles:
+      userCategories.length > 0 || userLocation !== 'Global'
+        ? rankArticles(normalizedArticles, userCategories, userLocation)
+        : normalizedArticles,
+  }
+}
+
+function normalizeArticle(article: Article): Article {
+  const safeUrl = getSafeArticleUrl(article.article_url)
+  const safeId = article.id?.trim() || makeStableArticleId(article)
+  return {
+    ...article,
+    id: safeId,
+    article_url: safeUrl,
+  }
+}
+
+function getSafeArticleUrl(url: string | null | undefined): string {
+  if (!url) return '#'
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.toString()
+    return '#'
+  } catch {
+    return '#'
+  }
+}
+
+function makeStableArticleId(article: Partial<Article>): string {
+  const base = `${article.article_url ?? ''}|${article.title ?? ''}|${article.source ?? ''}`
+  const normalized = base.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return normalized || `article-${Date.now()}`
 }

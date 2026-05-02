@@ -80,6 +80,8 @@ export default function ArticleCard({
   const [imgError, setImgError] = useState(false)
   const bookmarked = isBookmarked(article.id)
   const credibility = sourceCredibility(article.source)
+  const hasInternalRoute = Boolean(article.id?.trim())
+  const externalUrl = article.article_url && article.article_url !== '#' ? article.article_url : null
 
   // Show image only when the article actually has a URL and it hasn't failed
   const showImage = Boolean(article.image_url) && !imgError
@@ -95,7 +97,9 @@ export default function ArticleCard({
       }}
     >
       <Link
-        href={`/article/${article.id}`}
+        href={hasInternalRoute ? `/article/${encodeURIComponent(article.id)}` : (externalUrl ?? '#')}
+        target={!hasInternalRoute && externalUrl ? '_blank' : undefined}
+        rel={!hasInternalRoute && externalUrl ? 'noopener noreferrer' : undefined}
         className="block group outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 rounded-2xl"
       >
         <article

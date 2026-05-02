@@ -152,6 +152,7 @@ export default function ArticlePage() {
   const [commentLoading, setCommentLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const hasReadableSource = Boolean(article?.article_url && article.article_url !== '#')
 
   useEffect(() => {
     fetchArticle(id)
@@ -462,15 +463,25 @@ export default function ArticlePage() {
               </strong>
               .
             </p>
-            <a
-              href={article.article_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full bg-ink dark:bg-white text-white dark:text-ink font-sans font-semibold text-sm py-4 rounded-2xl press-effect shadow-sm hover:shadow-md transition-shadow"
-            >
-              Read Full Article
-              <ExternalLink size={15} strokeWidth={2.5} />
-            </a>
+            {hasReadableSource ? (
+              <a
+                href={article.article_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full bg-ink dark:bg-white text-white dark:text-ink font-sans font-semibold text-sm py-4 rounded-2xl press-effect shadow-sm hover:shadow-md transition-shadow"
+              >
+                Read Full Article
+                <ExternalLink size={15} strokeWidth={2.5} />
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="flex items-center justify-center gap-2 w-full bg-gray-300 text-white font-sans font-semibold text-sm py-4 rounded-2xl cursor-not-allowed dark:bg-gray-700"
+              >
+                Source link unavailable
+              </button>
+            )}
             <p className="mt-2 text-center text-[11px] font-sans text-gray-400 dark:text-gray-600">
               Opens {article.source} in your browser
             </p>
@@ -528,7 +539,7 @@ export default function ArticlePage() {
                 {related.map((item) => (
                   <Link
                     key={item.id}
-                    href={`/article/${item.id}`}
+                    href={`/article/${encodeURIComponent(item.id)}`}
                     className="block rounded-xl border border-border bg-white px-3 py-2 dark:border-dark-border dark:bg-dark-surface"
                   >
                     <p className="line-clamp-2 text-sm font-sans font-medium text-ink dark:text-gray-100">
